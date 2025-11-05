@@ -1,0 +1,118 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+      
+    - name: Select Xcode
+      run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+      
+    - name: Extract version from tag
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          TAG="${{ github.event.inputs.version }}"
+        else
+          TAG="${GITHUB_REF#refs/tags/v}"
+        fi
+        # Production release version (no suffix)
+        echo "version=$TAG" >> "$GITHUB_OUTPUT"
+        BUILD_NUMBER=$(git rev-list --count HEAD)
+        echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+        echo "## Production Release: v${TAG}" >> $GITHUB_STEP_SUMMARY
+        echo "Build: ${BUILD_NUMBER}" >> $GITHUB_STEP_SUMMARY
+      
+    - name: Setup App Store Connect API Key
+      run: |
+        mkdir -p ~/private_keys
+        echo "${{ secrets.APPSTORE_PRIVATE_KEY }}" > ~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8
+      
+    - name: Build and Archive iOS
+      run: |
+        xcodebuild archive \
+          -project LoRaCueManager.xcodeproj \
+          -scheme LoRaCueManager \
+          -destination "generic/platform=iOS" \
+          -archivePath ./build/LoRaCueManager-iOS.xcarchive \
+          CODE_SIGN_STYLE=Automatic \
+          MARKETING_VERSION=${{ steps.version.outputs.version }} \
+          CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build_number }} \
+          -allowProvisioningUpdates
+      
+    - name: Export iOS IPA
+      run: |
+        xcodebuild -exportArchive \
+          -archivePath ./build/LoRaCueManager-iOS.xcarchive \
+          -exportPath ./build/iOS \
+          -exportOptionsPlist .github/workflows/ExportOptions-iOS.plist \
+          -allowProvisioningUpdates
+      
+    - name: Upload iOS to App Store Connect
+      run: |
+        xcrun altool --upload-app \
+          --type ios \
+          --file ./build/iOS/LoRaCueManager.ipa \
+          --apiKey ${{ secrets.APPSTORE_KEY_ID }} \
+          --apiIssuer ${{ secrets.APPSTORE_ISSUER_ID }}
+      
+    - name: Build and Archive macOS
+      run: |
+        xcodebuild archive \
+          -project LoRaCueManager.xcodeproj \
+          -scheme LoRaCueManager \
+          -destination "generic/platform=macOS" \
+          -archivePath ./build/LoRaCueManager-macOS.xcarchive \
+          CODE_SIGN_STYLE=Automatic \
+          MARKETING_VERSION=${{ steps.version.outputs.version }} \
+          CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build_number }} \
+          -allowProvisioningUpdates
+      
+    - name: Export macOS PKG
+      run: |
+        xcodebuild -exportArchive \
+          -archivePath ./build/LoRaCueManager-macOS.xcarchive \
+          -exportPath ./build/macOS \
+          -exportOptionsPlist .github/workflows/ExportOptions-macOS.plist \
+          -allowProvisioningUpdates
+      
+    - name: Upload macOS to App Store Connect
+      run: |
+        xcrun altool --upload-app \
+          --type macos \
+          --file ./build/macOS/LoRaCueManager.pkg \
+          --apiKey ${{ secrets.APPSTORE_KEY_ID }} \
+          --apiIssuer ${{ secrets.APPSTORE_ISSUER_ID }}
+      
+    - name: Create ZIP archives for GitHub Release
+      run: |
+        cp ./build/iOS/LoRaCueManager.ipa ./LoRaCueManager-iOS-${{ steps.version.outputs.version }}.ipa
+        cp ./build/macOS/LoRaCueManager.pkg ./LoRaCueManager-macOS-${{ steps.version.outputs.version }}.pkg
+      
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          LoRaCueManager-iOS-${{ steps.version.outputs.version }}.ipa
+          LoRaCueManager-macOS-${{ steps.version.outputs.version }}.pkg
+        generate_release_notes: true
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

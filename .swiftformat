@@ -1,0 +1,34 @@
+--swiftversion 5.9
+
+# Indentation
+--indent 4
+--tabwidth 4
+--indentcase false
+--ifdef no-indent
+
+# Wrapping
+--maxwidth 120
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+
+# Spacing
+--trimwhitespace always
+--commas inline
+--semicolons never
+
+# Organization
+--importgrouping testable-bottom
+--extensionacl on-declarations
+
+# Formatting
+--self insert
+--stripunusedargs closure-only
+--redundanttype inferred
+
+# Excluded paths
+--exclude .build
+--exclude .swiftpm
+--exclude LoRaCueManager.xcodeproj
+--exclude LoRaCueManager.xcworkspace
+--exclude LoRaCueManagerPackage

@@ -1,0 +1,65 @@
+/* Device List */
+"devices.title" = "Devices";
+"devices.scan" = "Scan";
+"devices.stop" = "Stop";
+"devices.ble_section" = "BLE Devices";
+"devices.usb_section" = "USB Devices";
+"devices.no_devices" = "No Devices Found";
+"devices.no_devices_description" = "Tap Scan to search for devices";
+"devices.connected" = "Connected";
+
+/* Configuration */
+"config.title" = "Configuration";
+"config.general" = "General";
+"config.power" = "Power";
+"config.lora" = "LoRa";
+"config.paired" = "Paired Devices";
+"config.firmware" = "Firmware";
+"config.system" = "System";
+"config.not_connected" = "Device not connected";
+"config.save" = "Save";
+"config.loading" = "Loading...";
+
+/* General Settings */
+"general.name" = "Device Name";
+"general.mode" = "Mode";
+"general.brightness" = "Brightness";
+"general.slot" = "Slot";
+
+/* Power Settings */
+"power.display_sleep" = "Display Sleep";
+"power.light_sleep" = "Light Sleep";
+"power.deep_sleep" = "Deep Sleep";
+"power.seconds" = "seconds";
+
+/* LoRa Settings */
+"lora.frequency" = "Frequency";
+"lora.bandwidth" = "Bandwidth";
+"lora.spreading_factor" = "Spreading Factor";
+"lora.coding_rate" = "Coding Rate";
+"lora.tx_power" = "TX Power";
+"lora.band" = "Band";
+"lora.encryption" = "Encryption Key";
+
+/* Firmware */
+"firmware.version" = "Version";
+"firmware.update" = "Update Firmware";
+"firmware.select_file" = "Select File";
+
+/* System */
+"system.hardware" = "Hardware Version";
+"system.factory_reset" = "Factory Reset";
+"system.reset_confirm" = "Are you sure?";
+
+/* Errors */
+"error.connection_failed" = "Connection failed";
+"error.timeout" = "Operation timed out";
+"error.device_not_found" = "Device not found";
+"error.invalid_data" = "Invalid data received";
+
+/* Accessibility */
+"a11y.scan_hint" = "Searches for nearby LoRaCue devices";
+"a11y.stop_hint" = "Stops searching for devices";
+"a11y.favorite_add" = "Add to favorites";
+"a11y.favorite_remove" = "Remove from favorites";
+"a11y.connect_hint" = "Double tap to connect";

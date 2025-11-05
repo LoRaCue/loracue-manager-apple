@@ -1,0 +1,76 @@
+import SwiftUI
+
+struct PowerView: View {
+    @StateObject private var viewModel: PowerViewModel
+
+    init(service: LoRaCueService) {
+        _viewModel = StateObject(wrappedValue: PowerViewModel(service: service))
+    }
+
+    var body: some View {
+        Form {
+            if let config = viewModel.config {
+                Section("Display Sleep") {
+                    Toggle("Enabled", isOn: Binding(
+                        get: { config.displaySleepEnabled },
+                        set: { self.viewModel.config?.displaySleepEnabled = $0 }
+                    ))
+
+                    VStack(alignment: .leading) {
+                        Text("Timeout: \(LoRaCalculator.formatTimeout(config.displaySleepTimeoutMs))")
+                        Slider(value: Binding(
+                            get: { Double(config.displaySleepTimeoutMs) },
+                            set: { self.viewModel.config?.displaySleepTimeoutMs = Int($0) }
+                        ), in: 1000 ... 300_000, step: 1000)
+                    }
+                }
+
+                Section("Light Sleep") {
+                    Toggle("Enabled", isOn: Binding(
+                        get: { config.lightSleepEnabled },
+                        set: { self.viewModel.config?.lightSleepEnabled = $0 }
+                    ))
+
+                    VStack(alignment: .leading) {
+                        Text("Timeout: \(LoRaCalculator.formatTimeout(config.lightSleepTimeoutMs))")
+                        Slider(value: Binding(
+                            get: { Double(config.lightSleepTimeoutMs) },
+                            set: { self.viewModel.config?.lightSleepTimeoutMs = Int($0) }
+                        ), in: 1000 ... 300_000, step: 1000)
+                    }
+                }
+
+                Section("Deep Sleep") {
+                    Toggle("Enabled", isOn: Binding(
+                        get: { config.deepSleepEnabled },
+                        set: { self.viewModel.config?.deepSleepEnabled = $0 }
+                    ))
+
+                    VStack(alignment: .leading) {
+                        Text("Timeout: \(LoRaCalculator.formatTimeout(config.deepSleepTimeoutMs))")
+                        Slider(value: Binding(
+                            get: { Double(config.deepSleepTimeoutMs) },
+                            set: { self.viewModel.config?.deepSleepTimeoutMs = Int($0) }
+                        ), in: 1000 ... 600_000, step: 1000)
+                    }
+                }
+
+                Section {
+                    Button("Save") {
+                        Task { await self.viewModel.save() }
+                    }
+                    .disabled(self.viewModel.isLoading)
+                }
+            } else {
+                ProgressView()
+            }
+        }
+        .navigationTitle("Power Management")
+        .task { await self.viewModel.load() }
+        .alert("Error", isPresented: .constant(self.viewModel.error != nil)) {
+            Button("OK") { self.viewModel.error = nil }
+        } message: {
+            Text(self.viewModel.error ?? "")
+        }
+    }
+}
