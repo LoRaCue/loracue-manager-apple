@@ -22,7 +22,7 @@ echo "→ Building for iOS Simulator..."
 xcodebuild clean build \
     -project LoRaCueManager.xcodeproj \
     -scheme LoRaCueManager \
-    -destination "platform=iOS Simulator,name=iPhone 15" \
+    -destination "platform=iOS Simulator,name=iPhone 16" \
     CODE_SIGN_IDENTITY="" \
     CODE_SIGNING_REQUIRED=NO \
     > /dev/null 2>&1
