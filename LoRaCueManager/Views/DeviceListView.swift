@@ -88,9 +88,13 @@ struct DeviceListView: View {
                         systemImage: self.bleManager?.isScanning == true ? "stop.circle.fill" : "arrow.clockwise"
                     )
                 }
-                .accessibilityLabel(self.bleManager?.isScanning == true ? "Stop scanning" : "Scan for devices")
-                .accessibilityHint(self.bleManager?
-                    .isScanning == true ? "Stops searching for devices" : "Searches for nearby LoRaCue devices")
+                .accessibilityLabel(
+                    self.bleManager?.isScanning == true ? "Stop scanning" : "Scan for devices"
+                )
+                .accessibilityHint(
+                    self.bleManager?.isScanning == true ?
+                        "Stops searching for devices" : "Searches for nearby LoRaCue devices"
+                )
             }
         }
         .task {

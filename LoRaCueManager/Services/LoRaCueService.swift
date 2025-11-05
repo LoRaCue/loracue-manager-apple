@@ -20,7 +20,7 @@ class LoRaCueService: ObservableObject {
     #if os(macOS)
     let usbManager: USBManager?
     #endif
-    
+
     let instanceId = UUID().uuidString.prefix(8)
 
     enum ConnectionType {
@@ -36,9 +36,9 @@ class LoRaCueService: ObservableObject {
         #if os(macOS)
         self.usbManager = nil
         #endif
-        
+
         Logger.service.info("🆕 LoRaCueService created: \(self.instanceId), BLEManager: \(bleManager.instanceId)")
-        
+
         bleManager.onConnectionChanged = { [weak self] in
             Logger.service.info("📢 onConnectionChanged callback fired, sending objectWillChange")
             self?.objectWillChange.send()
@@ -81,7 +81,7 @@ class LoRaCueService: ObservableObject {
         }
 
         Logger.service.info("📥 Service got (\(response.count) chars): \(response.prefix(100))...")
-        
+
         if response.starts(with: "ERROR") {
             Logger.service.error("❌ Device error: \(response)")
             throw ServiceError.deviceError(response)

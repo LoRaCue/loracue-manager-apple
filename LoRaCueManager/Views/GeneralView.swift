@@ -24,7 +24,7 @@ struct GeneralView: View {
                                 .frame(width: 250)
                                 Spacer()
                             }
-                            
+
                             HStack {
                                 Text("Mode")
                                     .frame(width: 120, alignment: .leading)
@@ -39,21 +39,21 @@ struct GeneralView: View {
                                 .frame(width: 200)
                                 Spacer()
                             }
-                            
+
                             HStack {
                                 Text("Slot ID")
                                     .frame(width: 120, alignment: .leading)
                                 Stepper("\(config.slotId)", value: Binding(
                                     get: { config.slotId },
                                     set: { self.viewModel.config?.slotId = $0 }
-                                ), in: 1...16)
-                                .frame(width: 100)
+                                ), in: 1 ... 16)
+                                    .frame(width: 100)
                                 Spacer()
                             }
                         }
                         .padding()
                     }
-                    
+
                     GroupBox("Display") {
                         HStack {
                             Text("Brightness")
@@ -61,8 +61,8 @@ struct GeneralView: View {
                             Slider(value: Binding(
                                 get: { Double(config.brightness) },
                                 set: { self.viewModel.config?.brightness = Int($0) }
-                            ), in: 0...255, step: 1)
-                            .frame(width: 200)
+                            ), in: 0 ... 255, step: 1)
+                                .frame(width: 200)
                             Text("\(config.brightness)")
                                 .frame(width: 40, alignment: .leading)
                                 .foregroundColor(.secondary)
@@ -70,7 +70,7 @@ struct GeneralView: View {
                         }
                         .padding()
                     }
-                    
+
                     GroupBox("Connectivity") {
                         HStack {
                             Text("Bluetooth")
@@ -93,19 +93,19 @@ struct GeneralView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(self.viewModel.isLoading)
-                        
-                        if viewModel.isLoading {
+
+                        if self.viewModel.isLoading {
                             ProgressView()
                                 .scaleEffect(0.8)
                         }
                         Spacer()
                     }
                     .padding(.top, 10)
-                } else if viewModel.error != nil {
+                } else if self.viewModel.error != nil {
                     ContentUnavailableView(
                         "Failed to Load",
                         systemImage: "exclamationmark.triangle",
-                        description: Text(viewModel.error ?? "Unknown error")
+                        description: Text(self.viewModel.error ?? "Unknown error")
                     )
                 } else {
                     HStack {

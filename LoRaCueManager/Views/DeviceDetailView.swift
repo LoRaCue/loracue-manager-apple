@@ -1,23 +1,11 @@
-import OSLog
 import SwiftUI
 
 struct DeviceDetailView: View {
     @ObservedObject var service: LoRaCueService
 
     var body: some View {
-        let _ = Logger.ui
-            .info(
-                "🏗️ DeviceDetailView body called, service: \(self.service.instanceId), bleManager: \(self.service.bleManager?.instanceId ?? "nil"), peripheral: \(self.service.bleManager?.connectedPeripheral?.identifier.uuidString ?? "nil")"
-            )
-
         if let bleManager = service.bleManager {
             DetailContent(bleManager: bleManager, service: self.service)
-                .onAppear {
-                    Logger.ui
-                        .info(
-                            "📱 DetailContent wrapper appeared, service: \(self.service.instanceId), bleManager: \(bleManager.instanceId)"
-                        )
-                }
         } else {
             ContentUnavailableView(
                 "No Device Connected",
@@ -49,16 +37,20 @@ private struct DetailContent: View {
             }
         }
         .onChange(of: self.bleManager.connectedPeripheral?.identifier) { _, newValue in
-            Logger.ui
-                .info(
-                    "🔄 Peripheral changed to: \(newValue?.uuidString ?? "nil") [BLEManager: \(self.bleManager.instanceId)]"
-                )
+            Logger.ui.info(
+                """
+                Peripheral changed: \(newValue?.uuidString ?? "nil") \
+                BLEManager: \(self.bleManager.instanceId)
+                """
+            )
         }
         .onAppear {
-            Logger.ui
-                .info(
-                    "👁️ DetailContent appeared, BLEManager: \(self.bleManager.instanceId), peripheral: \(self.bleManager.connectedPeripheral?.identifier.uuidString ?? "nil")"
-                )
+            Logger.ui.info(
+                """
+                DetailContent appeared: BLEManager=\(self.bleManager.instanceId) \
+                peripheral=\(self.bleManager.connectedPeripheral?.identifier.uuidString ?? "nil")
+                """
+            )
         }
     }
 

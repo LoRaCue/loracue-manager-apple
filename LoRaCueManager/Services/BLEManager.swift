@@ -23,9 +23,9 @@ class BLEManager: NSObject, ObservableObject {
     @Published var connectedPeripheral: CBPeripheral?
     @Published var connectionState: CBPeripheralState = .disconnected
     @Published var isReady = false
-    
+
     var onConnectionChanged: (() -> Void)?
-    
+
     let instanceId = UUID().uuidString.prefix(8)
 
     private var centralManager: CBCentralManager!
@@ -83,16 +83,16 @@ class BLEManager: NSObject, ObservableObject {
 
     func sendCommand(_ command: String) async throws -> String {
         // Serialize commands through a queue
-        return try await withCheckedThrowingContinuation { queueContinuation in
+        try await withCheckedThrowingContinuation { queueContinuation in
             Task { @MainActor in
                 // Wait for previous command to finish
                 while self.isProcessingCommand {
                     try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
                 }
-                
+
                 self.isProcessingCommand = true
                 defer { self.isProcessingCommand = false }
-                
+
                 do {
                     let result = try await self.sendCommandInternal(command)
                     queueContinuation.resume(returning: result)
@@ -102,28 +102,28 @@ class BLEManager: NSObject, ObservableObject {
             }
         }
     }
-    
+
     private func sendCommandInternal(_ command: String) async throws -> String {
         guard let peripheral = connectedPeripheral,
               let tx = txCharacteristic
         else {
             throw BLEError.notConnected
         }
-        
+
         // Wait for device to be ready (max 5 seconds)
-        if !isReady {
+        if !self.isReady {
             Logger.ble.info("⏳ Waiting for device to be ready...")
-            for _ in 0..<50 {
-                if isReady { break }
+            for _ in 0 ..< 50 {
+                if self.isReady { break }
                 try await Task.sleep(nanoseconds: 100_000_000) // 100ms
             }
-            if !isReady {
+            if !self.isReady {
                 Logger.ble.error("❌ Device not ready after 5 seconds")
                 throw BLEError.notConnected
             }
             Logger.ble.info("✅ Device ready, proceeding with command")
         }
-        
+
         Logger.ble.info("📤 Sending command: \(command)")
 
         let result: String
@@ -151,7 +151,7 @@ class BLEManager: NSObject, ObservableObject {
             self.responseBuffer = ""
             throw error
         }
-        
+
         return result
     }
 }
@@ -238,7 +238,7 @@ extension BLEManager: CBCentralManagerDelegate {
 extension BLEManager: CBPeripheralDelegate {
     nonisolated func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         Task { @MainActor in
-            if let error = error {
+            if let error {
                 Logger.ble.error("❌ Service discovery error: \(error.localizedDescription)")
                 return
             }
@@ -260,7 +260,7 @@ extension BLEManager: CBPeripheralDelegate {
         error: Error?
     ) {
         Task { @MainActor in
-            if let error = error {
+            if let error {
                 Logger.ble.error("❌ Characteristic discovery error: \(error.localizedDescription)")
                 return
             }
@@ -278,7 +278,7 @@ extension BLEManager: CBPeripheralDelegate {
                     foundRx = true
                 }
             }
-            if foundTx && foundRx {
+            if foundTx, foundRx {
                 Logger.ble.info("📤 Sending objectWillChange (characteristics ready)...")
                 self.objectWillChange.send()
                 Logger.ble.info("✅ objectWillChange sent (characteristics ready)")
@@ -293,7 +293,7 @@ extension BLEManager: CBPeripheralDelegate {
                     Logger.ble.info("✅ RX characteristic ready, notifications enabled")
                 }
             }
-            if self.txCharacteristic != nil && self.rxCharacteristic != nil {
+            if self.txCharacteristic != nil, self.rxCharacteristic != nil {
                 self.isReady = true
                 Logger.ble.info("🎉 Device fully ready for communication")
             }
@@ -306,7 +306,8 @@ extension BLEManager: CBPeripheralDelegate {
         error: Error?
     ) {
         guard let data = characteristic.value,
-              let string = String(data: data, encoding: .utf8) else {
+              let string = String(data: data, encoding: .utf8)
+        else {
             Logger.ble.warning("⚠️ Received data but couldn't decode as UTF-8")
             return
         }
@@ -314,22 +315,22 @@ extension BLEManager: CBPeripheralDelegate {
         Task { @MainActor in
             Logger.ble.info("📥 Received chunk: \(string.count) chars")
             self.responseBuffer += string
-            
+
             // Cancel previous accumulation task
             self.responseAccumulationTask?.cancel()
-            
+
             // Wait for more chunks (200ms to handle large responses)
             self.responseAccumulationTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 200_000_000)
-                
+
                 let trimmed = self.responseBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
                 Logger.ble.info("📦 Accumulated response: \(trimmed.count) chars")
-                
+
                 // Check for complete JSON object or array, or newline
                 let hasNewline = trimmed.contains("\n")
                 let isCompleteJSON = (trimmed.hasPrefix("{") && trimmed.hasSuffix("}")) ||
-                                    (trimmed.hasPrefix("[") && trimmed.hasSuffix("]"))
-                
+                    (trimmed.hasPrefix("[") && trimmed.hasSuffix("]"))
+
                 if hasNewline || isCompleteJSON {
                     Logger.ble.info("✅ Complete response: \(trimmed.prefix(100))...")
                     self.responseContinuation?.resume(returning: trimmed)
