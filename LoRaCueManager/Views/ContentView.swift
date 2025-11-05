@@ -5,7 +5,7 @@ struct ContentView: View {
     let service: LoRaCueService
 
     var body: some View {
-        _ = Logger.ui.info(
+        Logger.ui.info(
             """
             ContentView body: service=\(self.service.instanceId) \
             bleManager=\(self.service.bleManager?.instanceId ?? "nil")

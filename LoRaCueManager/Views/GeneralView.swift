@@ -9,87 +9,107 @@ struct GeneralView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 24) {
                 if let config = viewModel.config {
-                    GroupBox("Device Identity") {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text("Name")
-                                    .frame(width: 120, alignment: .leading)
-                                TextField("", text: Binding(
-                                    get: { config.name },
-                                    set: { self.viewModel.config?.name = $0 }
-                                ))
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 250)
-                                Spacer()
-                            }
+                    // Device Name
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Device Name")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        TextField("Enter device name", text: Binding(
+                            get: { config.name },
+                            set: { self.viewModel.config?.name = $0 }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                    }
 
-                            HStack {
-                                Text("Mode")
-                                    .frame(width: 120, alignment: .leading)
-                                Picker("", selection: Binding(
-                                    get: { config.mode },
-                                    set: { self.viewModel.config?.mode = $0 }
-                                )) {
-                                    Text("Presenter").tag("PRESENTER")
-                                    Text("PC").tag("PC")
+                    // Operation Mode
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Operation Mode")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        HStack(spacing: 16) {
+                            ModeButton(
+                                title: "Presenter",
+                                description: "Send commands",
+                                isSelected: config.mode == "PRESENTER",
+                                action: { self.viewModel.config?.mode = "PRESENTER" }
+                            )
+                            ModeButton(
+                                title: "PC Receiver",
+                                description: "Receive commands",
+                                isSelected: config.mode == "PC",
+                                action: { self.viewModel.config?.mode = "PC" }
+                            )
+                        }
+                    }
+
+                    // Display Brightness
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Display Brightness: \(config.brightness)")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Slider(value: Binding(
+                            get: { Double(config.brightness) },
+                            set: { self.viewModel.config?.brightness = Int($0) }
+                        ), in: 0 ... 255, step: 1)
+                    }
+
+                    // Slot ID and Bluetooth (2 columns)
+                    HStack(alignment: .top, spacing: 24) {
+                        // Slot ID
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Slot ID (Multi-PC Routing)")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Picker("", selection: Binding(
+                                get: { config.slotId },
+                                set: { self.viewModel.config?.slotId = $0 }
+                            )) {
+                                ForEach(1 ... 16, id: \.self) { slot in
+                                    Text("Slot \(slot)").tag(slot)
                                 }
-                                .pickerStyle(.segmented)
-                                .frame(width: 200)
-                                Spacer()
                             }
-
-                            HStack {
-                                Text("Slot ID")
-                                    .frame(width: 120, alignment: .leading)
-                                Stepper("\(config.slotId)", value: Binding(
-                                    get: { config.slotId },
-                                    set: { self.viewModel.config?.slotId = $0 }
-                                ), in: 1 ... 16)
-                                    .frame(width: 100)
-                                Spacer()
-                            }
-                        }
-                        .padding()
-                    }
-
-                    GroupBox("Display") {
-                        HStack {
-                            Text("Brightness")
-                                .frame(width: 120, alignment: .leading)
-                            Slider(value: Binding(
-                                get: { Double(config.brightness) },
-                                set: { self.viewModel.config?.brightness = Int($0) }
-                            ), in: 0 ... 255, step: 1)
-                                .frame(width: 200)
-                            Text("\(config.brightness)")
-                                .frame(width: 40, alignment: .leading)
-                                .foregroundColor(.secondary)
-                            Spacer()
-                        }
-                        .padding()
-                    }
-
-                    GroupBox("Connectivity") {
-                        HStack {
-                            Text("Bluetooth")
-                                .frame(width: 120, alignment: .leading)
-                            Toggle("", isOn: Binding(
-                                get: { config.bluetooth },
-                                set: { self.viewModel.config?.bluetooth = $0 }
-                            ))
                             .labelsHidden()
-                            Spacer()
+                            Text("Select which PC is controlled or events are received for")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
-                        .padding()
+                        .frame(maxWidth: .infinity)
+
+                        // Bluetooth
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Bluetooth Configuration")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                Spacer()
+                                Toggle("", isOn: Binding(
+                                    get: { config.bluetooth },
+                                    set: { self.viewModel.config?.bluetooth = $0 }
+                                ))
+                                .labelsHidden()
+                            }
+                            Text("Enable Bluetooth for wireless configuration")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
                     }
+
+                    // Save Button
+                    Divider()
+                        .padding(.top, 8)
 
                     HStack {
                         Spacer()
-                            .frame(width: 120)
-                        Button("Save Changes") {
+                        Button(action: {
                             Task { await self.viewModel.save() }
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "square.and.arrow.down")
+                                Text("Save")
+                            }
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(self.viewModel.isLoading)
@@ -98,9 +118,7 @@ struct GeneralView: View {
                             ProgressView()
                                 .scaleEffect(0.8)
                         }
-                        Spacer()
                     }
-                    .padding(.top, 10)
                 } else if self.viewModel.error != nil {
                     ContentUnavailableView(
                         "Failed to Load",
@@ -116,9 +134,41 @@ struct GeneralView: View {
                     .padding()
                 }
             }
-            .padding(20)
+            .padding(32)
         }
-        .navigationTitle("General")
+        .navigationTitle("General Settings")
         .task { await self.viewModel.load() }
+    }
+}
+
+// Mode Button Component
+private struct ModeButton: View {
+    let title: String
+    let description: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: self.action) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(self.title)
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                Text(self.description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(self.isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(self.isSelected ? Color.accentColor : Color.gray.opacity(0.3), lineWidth: 2)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
