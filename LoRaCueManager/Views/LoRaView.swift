@@ -56,9 +56,9 @@ struct LoRaView: View {
                         get: { config.bandwidth },
                         set: { self.viewModel.config?.bandwidth = $0 }
                     )) {
-                        Text("125 kHz").tag(125_000)
-                        Text("250 kHz").tag(250_000)
-                        Text("500 kHz").tag(500_000)
+                        Text("125 kHz").tag(125)
+                        Text("250 kHz").tag(250)
+                        Text("500 kHz").tag(500)
                     }
 
                     Picker("Coding Rate", selection: Binding(

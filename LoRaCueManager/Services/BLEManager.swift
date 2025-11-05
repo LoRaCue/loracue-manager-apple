@@ -22,12 +22,20 @@ class BLEManager: NSObject, ObservableObject {
     @Published var isScanning = false
     @Published var connectedPeripheral: CBPeripheral?
     @Published var connectionState: CBPeripheralState = .disconnected
+    @Published var isReady = false
+    
+    var onConnectionChanged: (() -> Void)?
+    
+    let instanceId = UUID().uuidString.prefix(8)
 
     private var centralManager: CBCentralManager!
     private var txCharacteristic: CBCharacteristic?
     private var rxCharacteristic: CBCharacteristic?
     private var responseBuffer = ""
     private var responseContinuation: CheckedContinuation<String, Error>?
+    private var responseAccumulationTask: Task<Void, Never>?
+    private var commandQueue: [() async throws -> Void] = []
+    private var isProcessingCommand = false
 
     // Nordic UART Service UUIDs
     private nonisolated(unsafe) let nusServiceUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
@@ -36,6 +44,7 @@ class BLEManager: NSObject, ObservableObject {
 
     override init() {
         super.init()
+        Logger.ble.info("🆕 BLEManager created: \(self.instanceId)")
         self.centralManager = CBCentralManager(delegate: self, queue: .main)
     }
 
@@ -73,27 +82,77 @@ class BLEManager: NSObject, ObservableObject {
     }
 
     func sendCommand(_ command: String) async throws -> String {
+        // Serialize commands through a queue
+        return try await withCheckedThrowingContinuation { queueContinuation in
+            Task { @MainActor in
+                // Wait for previous command to finish
+                while self.isProcessingCommand {
+                    try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+                }
+                
+                self.isProcessingCommand = true
+                defer { self.isProcessingCommand = false }
+                
+                do {
+                    let result = try await self.sendCommandInternal(command)
+                    queueContinuation.resume(returning: result)
+                } catch {
+                    queueContinuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+    
+    private func sendCommandInternal(_ command: String) async throws -> String {
         guard let peripheral = connectedPeripheral,
               let tx = txCharacteristic
         else {
             throw BLEError.notConnected
         }
+        
+        // Wait for device to be ready (max 5 seconds)
+        if !isReady {
+            Logger.ble.info("⏳ Waiting for device to be ready...")
+            for _ in 0..<50 {
+                if isReady { break }
+                try await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            }
+            if !isReady {
+                Logger.ble.error("❌ Device not ready after 5 seconds")
+                throw BLEError.notConnected
+            }
+            Logger.ble.info("✅ Device ready, proceeding with command")
+        }
+        
+        Logger.ble.info("📤 Sending command: \(command)")
 
-        return try await withCheckedThrowingContinuation { continuation in
-            self.responseContinuation = continuation
-            self.responseBuffer = ""
+        let result: String
+        do {
+            result = try await withCheckedThrowingContinuation { continuation in
+                self.responseContinuation = continuation
+                self.responseBuffer = ""
 
-            let data = (command + "\n").data(using: .utf8)!
-            peripheral.writeValue(data, for: tx, type: .withResponse)
+                let data = (command + "\n").data(using: .utf8)!
+                Logger.ble.info("📤 Writing \(data.count) bytes to TX characteristic")
+                peripheral.writeValue(data, for: tx, type: .withResponse)
 
-            Task {
-                try await Task.sleep(nanoseconds: 5_000_000_000) // 5s timeout
-                if self.responseContinuation != nil {
-                    self.responseContinuation?.resume(throwing: BLEError.timeout)
-                    self.responseContinuation = nil
+                Task { @MainActor in
+                    try await Task.sleep(nanoseconds: 5_000_000_000) // 5s timeout
+                    if self.responseContinuation != nil {
+                        Logger.ble.error("⏱️ Command timed out: \(command)")
+                        self.responseContinuation?.resume(throwing: BLEError.timeout)
+                        self.responseContinuation = nil
+                    }
                 }
             }
+        } catch {
+            // Clean up on error
+            self.responseContinuation = nil
+            self.responseBuffer = ""
+            throw error
         }
+        
+        return result
     }
 }
 
@@ -137,15 +196,26 @@ extension BLEManager: CBCentralManagerDelegate {
     }
 
     nonisolated func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        peripheral.delegate = self
         Task { @MainActor in
-            Logger.ble.info("✅ Connected to: \(peripheral.name ?? "Unknown")")
+            Logger.ble.info("✅ Connected to: \(peripheral.name ?? "Unknown") [BLEManager: \(self.instanceId)]")
+            Logger.ble.info("📤 Sending objectWillChange...")
             objectWillChange.send()
+            if let callback = self.onConnectionChanged {
+                Logger.ble.info("📤 Calling onConnectionChanged callback")
+                callback()
+                Logger.ble.info("✅ onConnectionChanged callback completed")
+            } else {
+                Logger.ble.error("❌ onConnectionChanged is nil! Cannot notify service")
+            }
+            Logger.ble.info("✅ objectWillChange sent")
             self.connectedPeripheral = peripheral
+            Logger.ble.info("✅ connectedPeripheral set to: \(peripheral.identifier.uuidString)")
             self.connectionState = .connected
-            Logger.ble.info("📊 Connection state updated, objectWillChange sent")
-            peripheral.delegate = self
-            peripheral.discoverServices([self.nusServiceUUID])
+            Logger.ble.info("📊 Connection state updated, discovering services...")
         }
+        peripheral.discoverServices([self.nusServiceUUID])
+        Logger.ble.info("🔍 Requested service discovery for NUS")
     }
 
     nonisolated func centralManager(
@@ -158,6 +228,7 @@ extension BLEManager: CBCentralManagerDelegate {
             self.connectionState = .disconnected
             self.txCharacteristic = nil
             self.rxCharacteristic = nil
+            self.isReady = false
         }
     }
 }
@@ -166,9 +237,20 @@ extension BLEManager: CBCentralManagerDelegate {
 
 extension BLEManager: CBPeripheralDelegate {
     nonisolated func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-        guard let services = peripheral.services else { return }
-        for service in services where service.uuid == self.nusServiceUUID {
-            peripheral.discoverCharacteristics([nusTxUUID, nusRxUUID], for: service)
+        Task { @MainActor in
+            if let error = error {
+                Logger.ble.error("❌ Service discovery error: \(error.localizedDescription)")
+                return
+            }
+            guard let services = peripheral.services else {
+                Logger.ble.warning("⚠️ No services found")
+                return
+            }
+            Logger.ble.info("🔍 Discovered \(services.count) service(s)")
+            for service in services where service.uuid == self.nusServiceUUID {
+                Logger.ble.info("✅ Found NUS service, discovering characteristics...")
+                peripheral.discoverCharacteristics([nusTxUUID, nusRxUUID], for: service)
+            }
         }
     }
 
@@ -177,15 +259,43 @@ extension BLEManager: CBPeripheralDelegate {
         didDiscoverCharacteristicsFor service: CBService,
         error: Error?
     ) {
-        guard let characteristics = service.characteristics else { return }
         Task { @MainActor in
+            if let error = error {
+                Logger.ble.error("❌ Characteristic discovery error: \(error.localizedDescription)")
+                return
+            }
+            guard let characteristics = service.characteristics else {
+                Logger.ble.warning("⚠️ No characteristics found")
+                return
+            }
+            Logger.ble.info("🔍 Discovered \(characteristics.count) characteristic(s)")
+            var foundTx = false
+            var foundRx = false
+            for characteristic in characteristics {
+                if characteristic.uuid == self.nusTxUUID {
+                    foundTx = true
+                } else if characteristic.uuid == self.nusRxUUID {
+                    foundRx = true
+                }
+            }
+            if foundTx && foundRx {
+                Logger.ble.info("📤 Sending objectWillChange (characteristics ready)...")
+                self.objectWillChange.send()
+                Logger.ble.info("✅ objectWillChange sent (characteristics ready)")
+            }
             for characteristic in characteristics {
                 if characteristic.uuid == self.nusTxUUID {
                     self.txCharacteristic = characteristic
+                    Logger.ble.info("✅ TX characteristic ready")
                 } else if characteristic.uuid == self.nusRxUUID {
                     self.rxCharacteristic = characteristic
                     peripheral.setNotifyValue(true, for: characteristic)
+                    Logger.ble.info("✅ RX characteristic ready, notifications enabled")
                 }
+            }
+            if self.txCharacteristic != nil && self.rxCharacteristic != nil {
+                self.isReady = true
+                Logger.ble.info("🎉 Device fully ready for communication")
             }
         }
     }
@@ -196,15 +306,37 @@ extension BLEManager: CBPeripheralDelegate {
         error: Error?
     ) {
         guard let data = characteristic.value,
-              let string = String(data: data, encoding: .utf8) else { return }
+              let string = String(data: data, encoding: .utf8) else {
+            Logger.ble.warning("⚠️ Received data but couldn't decode as UTF-8")
+            return
+        }
 
         Task { @MainActor in
+            Logger.ble.info("📥 Received chunk: \(string.count) chars")
             self.responseBuffer += string
-            if self.responseBuffer.contains("\n") {
-                let response = self.responseBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
-                self.responseContinuation?.resume(returning: response)
-                self.responseContinuation = nil
-                self.responseBuffer = ""
+            
+            // Cancel previous accumulation task
+            self.responseAccumulationTask?.cancel()
+            
+            // Wait for more chunks (200ms to handle large responses)
+            self.responseAccumulationTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                
+                let trimmed = self.responseBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+                Logger.ble.info("📦 Accumulated response: \(trimmed.count) chars")
+                
+                // Check for complete JSON object or array, or newline
+                let hasNewline = trimmed.contains("\n")
+                let isCompleteJSON = (trimmed.hasPrefix("{") && trimmed.hasSuffix("}")) ||
+                                    (trimmed.hasPrefix("[") && trimmed.hasSuffix("]"))
+                
+                if hasNewline || isCompleteJSON {
+                    Logger.ble.info("✅ Complete response: \(trimmed.prefix(100))...")
+                    self.responseContinuation?.resume(returning: trimmed)
+                    self.responseContinuation = nil
+                    self.responseBuffer = ""
+                    self.responseAccumulationTask = nil
+                }
             }
         }
     }

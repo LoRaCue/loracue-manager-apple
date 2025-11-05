@@ -1,15 +1,19 @@
+import OSLog
 import SwiftUI
 
 @main
 struct LoRaCueManagerApp: App {
-    @StateObject private var bleManager = BLEManager()
     @StateObject private var service: LoRaCueService
 
     init() {
+        Logger.ui.info("🚀 App init started")
         let ble = BLEManager()
+        Logger.ui.info("✅ BLEManager created in app: \(ble.instanceId)")
         let svc = LoRaCueService(bleManager: ble)
-        _bleManager = StateObject(wrappedValue: ble)
+        Logger.ui.info("✅ LoRaCueService created in app: \(svc.instanceId)")
+        Logger.ui.info("✅ Callback set during service init")
         _service = StateObject(wrappedValue: svc)
+        Logger.ui.info("✅ StateObject initialized")
     }
 
     var body: some Scene {

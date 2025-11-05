@@ -2,14 +2,20 @@ import CoreBluetooth
 import SwiftUI
 
 struct DeviceListView: View {
-    @StateObject private var bleManager = BLEManager()
-    #if os(macOS)
-    @StateObject private var usbManager = USBManager()
-    #endif
+    @ObservedObject var service: LoRaCueService
     @StateObject private var viewModel: DeviceListViewModel
     @State private var selectedDevice: String?
 
+    private var bleManager: BLEManager? {
+        self.service.bleManager
+    }
+
+    #if os(macOS)
+    @StateObject private var usbManager = USBManager()
+    #endif
+
     init(service: LoRaCueService) {
+        self.service = service
         _viewModel = StateObject(wrappedValue: DeviceListViewModel(service: service))
     }
 
@@ -22,9 +28,9 @@ struct DeviceListView: View {
                             name: peripheral.name ?? "Unknown",
                             type: "BLE",
                             isFavorite: self.viewModel.favorites.contains(peripheral.identifier.uuidString),
-                            isConnected: self.bleManager.connectedPeripheral?.identifier == peripheral.identifier
+                            isConnected: self.bleManager?.connectedPeripheral?.identifier == peripheral.identifier
                         ) {
-                            self.bleManager.connect(to: peripheral)
+                            self.bleManager?.connect(to: peripheral)
                             self.selectedDevice = peripheral.identifier.uuidString
                         } onFavorite: {
                             self.viewModel.toggleFavorite(peripheral.identifier.uuidString)
@@ -77,11 +83,14 @@ struct DeviceListView: View {
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Button(action: self.scan) {
-                    Label("Scan", systemImage: self.bleManager.isScanning ? "stop.circle.fill" : "arrow.clockwise")
+                    Label(
+                        "Scan",
+                        systemImage: self.bleManager?.isScanning == true ? "stop.circle.fill" : "arrow.clockwise"
+                    )
                 }
-                .accessibilityLabel(self.bleManager.isScanning ? "Stop scanning" : "Scan for devices")
-                .accessibilityHint(self.bleManager
-                    .isScanning ? "Stops searching for devices" : "Searches for nearby LoRaCue devices")
+                .accessibilityLabel(self.bleManager?.isScanning == true ? "Stop scanning" : "Scan for devices")
+                .accessibilityHint(self.bleManager?
+                    .isScanning == true ? "Stops searching for devices" : "Searches for nearby LoRaCue devices")
             }
         }
         .task {
@@ -92,7 +101,7 @@ struct DeviceListView: View {
     }
 
     private var sortedBLEDevices: [CBPeripheral] {
-        self.bleManager.discoveredDevices
+        (self.bleManager?.discoveredDevices ?? [])
             .filter { peripheral in
                 guard let name = peripheral.name else { return false }
                 return name.hasPrefix("LoRaCue")
@@ -106,10 +115,11 @@ struct DeviceListView: View {
     }
 
     private func scan() {
-        if self.bleManager.isScanning {
-            self.bleManager.stopScanning()
+        guard let bleManager = self.bleManager else { return }
+        if bleManager.isScanning {
+            bleManager.stopScanning()
         } else {
-            self.bleManager.startScanning()
+            bleManager.startScanning()
             #if os(macOS)
             self.usbManager.scanForDevices()
             #endif

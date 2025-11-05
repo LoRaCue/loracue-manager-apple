@@ -54,6 +54,7 @@ class GeneralViewModel: ObservableObject {
 
         do {
             self.config = try await self.service.getGeneralConfig()
+            self.error = nil
         } catch {
             self.error = error.localizedDescription
         }

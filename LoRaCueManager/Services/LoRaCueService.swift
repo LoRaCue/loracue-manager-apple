@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import OSLog
 
 /// High-level service for LoRaCue device configuration and management.
 ///
@@ -19,6 +20,8 @@ class LoRaCueService: ObservableObject {
     #if os(macOS)
     let usbManager: USBManager?
     #endif
+    
+    let instanceId = UUID().uuidString.prefix(8)
 
     enum ConnectionType {
         case ble
@@ -33,11 +36,23 @@ class LoRaCueService: ObservableObject {
         #if os(macOS)
         self.usbManager = nil
         #endif
+        
+        Logger.service.info("🆕 LoRaCueService created: \(self.instanceId), BLEManager: \(bleManager.instanceId)")
+        
+        bleManager.onConnectionChanged = { [weak self] in
+            Logger.service.info("📢 onConnectionChanged callback fired, sending objectWillChange")
+            self?.objectWillChange.send()
+        }
+        Logger.service.info("✅ Set onConnectionChanged callback on BLEManager \(bleManager.instanceId)")
 
         // Forward BLEManager changes
-        bleManager.objectWillChange.sink { [weak self] _ in
-            self?.objectWillChange.send()
-        }.store(in: &self.cancellables)
+        bleManager.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                Logger.service.info("📢 BLEManager objectWillChange received via Combine")
+                self?.objectWillChange.send()
+            }
+            .store(in: &self.cancellables)
     }
 
     #if os(macOS)
@@ -49,6 +64,7 @@ class LoRaCueService: ObservableObject {
     #endif
 
     func sendCommand(_ command: String) async throws -> String {
+        Logger.service.info("📤 Service sending: \(command)")
         let response: String
 
         switch self.connectionType {
@@ -64,7 +80,10 @@ class LoRaCueService: ObservableObject {
             #endif
         }
 
+        Logger.service.info("📥 Service got (\(response.count) chars): \(response.prefix(100))...")
+        
         if response.starts(with: "ERROR") {
+            Logger.service.error("❌ Device error: \(response)")
             throw ServiceError.deviceError(response)
         }
 
@@ -84,7 +103,15 @@ class LoRaCueService: ObservableObject {
 
     func getGeneralConfig() async throws -> GeneralConfig {
         let response = try await sendCommand("GET_GENERAL")
-        return try JSONDecoder().decode(GeneralConfig.self, from: response.data(using: .utf8)!)
+        Logger.service.info("🔍 Parsing GeneralConfig from response")
+        do {
+            let config = try JSONDecoder().decode(GeneralConfig.self, from: response.data(using: .utf8)!)
+            Logger.service.info("✅ Parsed GeneralConfig: \(config.name)")
+            return config
+        } catch {
+            Logger.service.error("❌ Failed to parse GeneralConfig: \(error)")
+            throw error
+        }
     }
 
     func setGeneralConfig(_ config: GeneralConfig) async throws {

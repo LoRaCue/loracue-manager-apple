@@ -1,15 +1,44 @@
+import OSLog
 import SwiftUI
 
 struct DeviceDetailView: View {
     @ObservedObject var service: LoRaCueService
 
-    private var isConnected: Bool {
-        self.service.bleManager?.connectedPeripheral != nil
+    var body: some View {
+        let _ = Logger.ui
+            .info(
+                "🏗️ DeviceDetailView body called, service: \(self.service.instanceId), bleManager: \(self.service.bleManager?.instanceId ?? "nil"), peripheral: \(self.service.bleManager?.connectedPeripheral?.identifier.uuidString ?? "nil")"
+            )
+
+        if let bleManager = service.bleManager {
+            DetailContent(bleManager: bleManager, service: self.service)
+                .onAppear {
+                    Logger.ui
+                        .info(
+                            "📱 DetailContent wrapper appeared, service: \(self.service.instanceId), bleManager: \(bleManager.instanceId)"
+                        )
+                }
+        } else {
+            ContentUnavailableView(
+                "No Device Connected",
+                systemImage: "antenna.radiowaves.left.and.right.slash",
+                description: Text("Select a device from the list to connect")
+            )
+            .onAppear {
+                Logger.ui.info("⚠️ No BLEManager in service \(self.service.instanceId)")
+            }
+        }
     }
+}
+
+private struct DetailContent: View {
+    @ObservedObject var bleManager: BLEManager
+    let service: LoRaCueService
+    @State private var selectedTab: String? = "General"
 
     var body: some View {
         Group {
-            if self.isConnected {
+            if self.bleManager.connectedPeripheral != nil {
                 self.configurationView
             } else {
                 ContentUnavailableView(
@@ -19,7 +48,18 @@ struct DeviceDetailView: View {
                 )
             }
         }
-        .id(self.service.bleManager?.connectedPeripheral?.identifier)
+        .onChange(of: self.bleManager.connectedPeripheral?.identifier) { _, newValue in
+            Logger.ui
+                .info(
+                    "🔄 Peripheral changed to: \(newValue?.uuidString ?? "nil") [BLEManager: \(self.bleManager.instanceId)]"
+                )
+        }
+        .onAppear {
+            Logger.ui
+                .info(
+                    "👁️ DetailContent appeared, BLEManager: \(self.bleManager.instanceId), peripheral: \(self.bleManager.connectedPeripheral?.identifier.uuidString ?? "nil")"
+                )
+        }
     }
 
     @ViewBuilder
@@ -41,18 +81,45 @@ struct DeviceDetailView: View {
         }
         #else
         NavigationSplitView {
-            List {
-                NavigationLink("General", destination: GeneralView(service: self.service))
-                NavigationLink("Power", destination: PowerView(service: self.service))
-                NavigationLink("LoRa", destination: LoRaView(service: self.service))
-                NavigationLink("Paired Devices", destination: PairedDevicesView(service: self.service))
-                NavigationLink("Firmware", destination: FirmwareUpgradeView(service: self.service))
-                NavigationLink("System", destination: SystemView(service: self.service))
+            List(selection: self.$selectedTab) {
+                NavigationLink(value: "General") {
+                    Label("General", systemImage: "gear")
+                }
+                NavigationLink(value: "Power") {
+                    Label("Power", systemImage: "battery.100")
+                }
+                NavigationLink(value: "LoRa") {
+                    Label("LoRa", systemImage: "antenna.radiowaves.left.and.right")
+                }
+                NavigationLink(value: "Paired") {
+                    Label("Paired Devices", systemImage: "link")
+                }
+                NavigationLink(value: "Firmware") {
+                    Label("Firmware", systemImage: "arrow.down.circle")
+                }
+                NavigationLink(value: "System") {
+                    Label("System", systemImage: "info.circle")
+                }
             }
             .navigationTitle("Configuration")
         } detail: {
-            Text("Select a configuration tab")
-                .foregroundColor(.secondary)
+            switch self.selectedTab {
+            case "General":
+                GeneralView(service: self.service)
+            case "Power":
+                PowerView(service: self.service)
+            case "LoRa":
+                LoRaView(service: self.service)
+            case "Paired":
+                PairedDevicesView(service: self.service)
+            case "Firmware":
+                FirmwareUpgradeView(service: self.service)
+            case "System":
+                SystemView(service: self.service)
+            default:
+                Text("Select a configuration tab")
+                    .foregroundColor(.secondary)
+            }
         }
         #endif
     }
