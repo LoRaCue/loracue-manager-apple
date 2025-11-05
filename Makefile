@@ -50,23 +50,21 @@ check: lint
 build-ios:
 	@echo "Building for iOS Simulator..."
 	@xcodebuild clean build \
-		-project LoRaCueManager.xcodeproj \
+		-workspace LoRaCueManager.xcworkspace \
 		-scheme LoRaCueManager \
-		-destination "platform=iOS Simulator,name=iPhone 15" \
-		CODE_SIGN_IDENTITY="" \
-		CODE_SIGNING_REQUIRED=NO
+		-destination "platform=iOS Simulator,name=iPhone 16e,OS=18.6"
 
 build-macos:
 	@echo "Building for macOS..."
 	@xcodebuild clean build \
-		-project LoRaCueManager.xcodeproj \
+		-workspace LoRaCueManager.xcworkspace \
 		-scheme LoRaCueManager \
 		-destination "platform=macOS"
 
 test:
 	@echo "Running tests..."
 	@xcodebuild test \
-		-project LoRaCueManager.xcodeproj \
+		-workspace LoRaCueManager.xcworkspace \
 		-scheme LoRaCueManager \
 		-destination "platform=macOS" \
 		-enableCodeCoverage YES
@@ -74,7 +72,7 @@ test:
 clean:
 	@echo "Cleaning build artifacts..."
 	@xcodebuild clean \
-		-project LoRaCueManager.xcodeproj \
+		-workspace LoRaCueManager.xcworkspace \
 		-scheme LoRaCueManager
 	@rm -rf .build
 	@echo "✓ Clean complete"
