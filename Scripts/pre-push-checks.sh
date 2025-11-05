@@ -4,7 +4,7 @@ echo "Running pre-push checks..."
 
 # Build for macOS
 echo "→ Building for macOS..."
-xcodebuild clean build \
+xcodebuild build \
     -project LoRaCueManager.xcodeproj \
     -scheme LoRaCueManager \
     -destination "platform=macOS" \
@@ -19,7 +19,7 @@ fi
 
 # Build for iOS Simulator
 echo "→ Building for iOS Simulator..."
-xcodebuild clean build \
+xcodebuild build \
     -project LoRaCueManager.xcodeproj \
     -scheme LoRaCueManager \
     -destination "platform=iOS Simulator,name=iPhone 16 Pro" \
