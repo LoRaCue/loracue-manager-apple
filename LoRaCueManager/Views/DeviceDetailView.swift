@@ -5,18 +5,7 @@ struct DeviceDetailView: View {
     @ObservedObject var service: LoRaCueService
 
     var body: some View {
-        if let bleManager = service.bleManager {
-            DetailContent(bleManager: bleManager, service: self.service)
-        } else {
-            ContentUnavailableView(
-                "No Device Connected",
-                systemImage: "antenna.radiowaves.left.and.right.slash",
-                description: Text("Select a device from the list to connect")
-            )
-            .onAppear {
-                Logger.ui.info("⚠️ No BLEManager in service \(self.service.instanceId)")
-            }
-        }
+        DetailContent(bleManager: self.service.bleManager, service: self.service)
     }
 }
 

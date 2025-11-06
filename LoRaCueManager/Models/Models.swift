@@ -145,3 +145,55 @@ struct LoRaBand: Codable, Identifiable, Hashable {
 struct UnpairRequest: Codable {
     let mac: String
 }
+
+// MARK: - JSON-RPC Error
+
+/// JSON-RPC 2.0 error codes and user-friendly messages
+enum JSONRPCError: Error, LocalizedError {
+    case parseError
+    case invalidRequest
+    case methodNotFound
+    case invalidParams(String)
+    case internalError(String)
+    case transportError(String)
+    case timeout
+    case unknown(Int, String)
+
+    init(code: Int, message: String) {
+        switch code {
+        case -32700:
+            self = .parseError
+        case -32600:
+            self = .invalidRequest
+        case -32601:
+            self = .methodNotFound
+        case -32602:
+            self = .invalidParams(message)
+        case -32603:
+            self = .internalError(message)
+        default:
+            self = .unknown(code, message)
+        }
+    }
+
+    var errorDescription: String? {
+        switch self {
+        case .parseError:
+            "Invalid JSON received from device"
+        case .invalidRequest:
+            "Invalid request format"
+        case .methodNotFound:
+            "Command not supported by device"
+        case let .invalidParams(detail):
+            "Invalid parameters: \(detail)"
+        case let .internalError(detail):
+            "Device error: \(detail)"
+        case let .transportError(detail):
+            "Communication error: \(detail)"
+        case .timeout:
+            "Request timed out"
+        case let .unknown(code, message):
+            "Error \(code): \(message)"
+        }
+    }
+}

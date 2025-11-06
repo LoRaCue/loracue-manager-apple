@@ -53,7 +53,7 @@ class GeneralViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            self.config = try await self.service.getGeneralConfig()
+            self.config = try await self.service.getGeneral()
             self.error = nil
         } catch {
             self.error = error.localizedDescription
@@ -66,7 +66,7 @@ class GeneralViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            try await self.service.setGeneralConfig(config)
+            try await self.service.setGeneral(config)
         } catch {
             self.error = error.localizedDescription
         }
@@ -92,7 +92,7 @@ class PowerViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            self.config = try await self.service.getPowerConfig()
+            self.config = try await self.service.getPowerManagement()
         } catch {
             self.error = error.localizedDescription
         }
@@ -104,7 +104,7 @@ class PowerViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            try await self.service.setPowerConfig(config)
+            try await self.service.setPowerManagement(config)
         } catch {
             self.error = error.localizedDescription
         }
@@ -132,7 +132,7 @@ class LoRaViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            async let configTask = self.service.getLoRaConfig()
+            async let configTask = self.service.getLoRa()
             async let bandsTask = self.service.getLoRaBands()
 
             self.config = try await configTask
@@ -148,7 +148,7 @@ class LoRaViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            try await self.service.setLoRaConfig(config)
+            try await self.service.setLoRa(config)
         } catch {
             self.error = error.localizedDescription
         }
@@ -216,7 +216,7 @@ class PairedDevicesViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            try await self.service.pairDevice(device)
+            try await self.service.addPairedDevice(device)
             await self.load()
         } catch {
             self.error = error.localizedDescription
@@ -240,7 +240,7 @@ class PairedDevicesViewModel: ObservableObject {
         defer { isLoading = false }
 
         do {
-            try await self.service.unpairDevice(mac: mac)
+            try await self.service.deletePairedDevice(mac: mac)
             await self.load()
         } catch {
             self.error = error.localizedDescription
@@ -270,7 +270,8 @@ class FirmwareViewModel: ObservableObject {
 
         do {
             let data = try Data(contentsOf: url)
-            try await service.startFirmwareUpgrade(firmware: data)
+            try await service.upgradeFirmware(size: data.count)
+            // TODO: Implement actual firmware data transfer
         } catch {
             self.error = error.localizedDescription
         }

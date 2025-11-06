@@ -1,211 +1,189 @@
-import Combine
 import Foundation
 import OSLog
 
-/// High-level service for LoRaCue device configuration and management.
-///
-/// `LoRaCueService` provides a unified interface for device operations,
-/// abstracting the underlying BLE/USB transport layer.
-///
-/// ## Topics
-/// ### Configuration
-/// - ``getConfiguration()``
-/// - ``setConfiguration(_:)``
-/// ### System Operations
-/// - ``factoryReset()``
-/// - ``updateFirmware(data:progress:)``
+/// JSON-RPC 2.0 service for LoRaCue device configuration
 @MainActor
 class LoRaCueService: ObservableObject {
-    let bleManager: BLEManager?
-    #if os(macOS)
-    let usbManager: USBManager?
-    #endif
-
-    let instanceId = UUID().uuidString.prefix(8)
-
-    enum ConnectionType {
-        case ble
-        case usb
-    }
-
-    private var connectionType: ConnectionType = .ble
-    private var cancellables = Set<AnyCancellable>()
+    let bleManager: BLEManager
+    private var transport: DeviceTransport
+    private var requestId = 0
+    private let logger = Logger(subsystem: "com.loracue.manager", category: "JSONRPCService")
 
     init(bleManager: BLEManager) {
         self.bleManager = bleManager
-        #if os(macOS)
-        self.usbManager = nil
-        #endif
-
-        Logger.service.info("🆕 LoRaCueService created: \(self.instanceId), BLEManager: \(bleManager.instanceId)")
-
-        bleManager.onConnectionChanged = { [weak self] in
-            Logger.service.info("📢 onConnectionChanged callback fired, sending objectWillChange")
-            self?.objectWillChange.send()
-        }
-        Logger.service.info("✅ Set onConnectionChanged callback on BLEManager \(bleManager.instanceId)")
-
-        // Forward BLEManager changes
-        bleManager.objectWillChange
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                Logger.service.info("📢 BLEManager objectWillChange received via Combine")
-                self?.objectWillChange.send()
-            }
-            .store(in: &self.cancellables)
+        self.transport = bleManager
     }
 
+    /// Switch to USB transport
     #if os(macOS)
-    init(usbManager: USBManager) {
-        self.bleManager = nil
-        self.usbManager = usbManager
-        self.connectionType = .usb
+    func useUSBTransport(_ usbManager: USBManager) {
+        self.transport = usbManager
     }
     #endif
 
-    func sendCommand(_ command: String) async throws -> String {
-        Logger.service.info("📤 Service sending: \(command)")
-        let response: String
-
-        switch self.connectionType {
-        case .ble:
-            guard let ble = bleManager else { throw ServiceError.notConnected }
-            response = try await ble.sendCommand(command)
-        case .usb:
-            #if os(macOS)
-            guard let usb = usbManager else { throw ServiceError.notConnected }
-            response = try await usb.sendCommand(command)
-            #else
-            throw ServiceError.notConnected
-            #endif
-        }
-
-        Logger.service.info("📥 Service got (\(response.count) chars): \(response.prefix(100))...")
-
-        if response.starts(with: "ERROR") {
-            Logger.service.error("❌ Device error: \(response)")
-            throw ServiceError.deviceError(response)
-        }
-
-        return response
+    /// Switch to BLE transport
+    func useBLETransport() {
+        self.transport = self.bleManager
     }
 
-    // MARK: - API Methods
+    // MARK: - Core JSON-RPC Methods
+
+    private func sendRequest<T: Decodable>(
+        method: String,
+        params: (any Encodable)? = nil
+    ) async throws -> T {
+        self.requestId += 1
+        let id = self.requestId
+
+        var request: [String: Any] = [
+            "jsonrpc": "2.0",
+            "method": method,
+            "id": id
+        ]
+
+        if let params {
+            let paramsData = try JSONEncoder().encode(AnyEncodable(params))
+            let paramsJSON = try JSONSerialization.jsonObject(with: paramsData)
+            request["params"] = paramsJSON
+        }
+
+        let requestData = try JSONSerialization.data(withJSONObject: request)
+        guard let requestString = String(data: requestData, encoding: .utf8) else {
+            throw JSONRPCError.transportError("Failed to encode request")
+        }
+
+        self.logger.info("📤 JSON-RPC Request: \(requestString)")
+
+        let responseString = try await transport.sendCommand(requestString)
+        self.logger.info("📥 JSON-RPC Response: \(responseString)")
+
+        guard let responseData = responseString.data(using: .utf8) else {
+            throw JSONRPCError.parseError
+        }
+
+        let response = try JSONDecoder().decode(JSONRPCResponse<T>.self, from: responseData)
+
+        if let error = response.error {
+            throw JSONRPCError(code: error.code, message: error.message)
+        }
+
+        guard let result = response.result else {
+            throw JSONRPCError.invalidRequest
+        }
+
+        return result
+    }
+
+    private func sendRequestVoid(
+        method: String,
+        params: (any Encodable)? = nil
+    ) async throws {
+        let _: String = try await sendRequest(method: method, params: params)
+    }
+
+    // MARK: - Device Methods
 
     func ping() async throws -> String {
-        try await self.sendCommand("PING")
+        try await self.sendRequest(method: "ping")
     }
 
     func getDeviceInfo() async throws -> DeviceInfo {
-        let response = try await sendCommand("GET_DEVICE_INFO")
-        return try JSONDecoder().decode(DeviceInfo.self, from: response.data(using: .utf8)!)
-    }
-
-    func getGeneralConfig() async throws -> GeneralConfig {
-        let response = try await sendCommand("GET_GENERAL")
-        Logger.service.info("🔍 Parsing GeneralConfig from response")
-        do {
-            let config = try JSONDecoder().decode(GeneralConfig.self, from: response.data(using: .utf8)!)
-            Logger.service.info("✅ Parsed GeneralConfig: \(config.name)")
-            return config
-        } catch {
-            Logger.service.error("❌ Failed to parse GeneralConfig: \(error)")
-            throw error
-        }
-    }
-
-    func setGeneralConfig(_ config: GeneralConfig) async throws {
-        let json = try JSONEncoder().encode(config)
-        let jsonString = String(data: json, encoding: .utf8)!
-        _ = try await self.sendCommand("SET_GENERAL \(jsonString)")
-    }
-
-    func getPowerConfig() async throws -> PowerConfig {
-        let response = try await sendCommand("GET_POWER_MANAGEMENT")
-        return try JSONDecoder().decode(PowerConfig.self, from: response.data(using: .utf8)!)
-    }
-
-    func setPowerConfig(_ config: PowerConfig) async throws {
-        let json = try JSONEncoder().encode(config)
-        let jsonString = String(data: json, encoding: .utf8)!
-        _ = try await self.sendCommand("SET_POWER_MANAGEMENT \(jsonString)")
-    }
-
-    func getLoRaConfig() async throws -> LoRaConfig {
-        let response = try await sendCommand("GET_LORA")
-        return try JSONDecoder().decode(LoRaConfig.self, from: response.data(using: .utf8)!)
-    }
-
-    func setLoRaConfig(_ config: LoRaConfig) async throws {
-        let json = try JSONEncoder().encode(config)
-        let jsonString = String(data: json, encoding: .utf8)!
-        _ = try await self.sendCommand("SET_LORA \(jsonString)")
-    }
-
-    func getLoRaKey() async throws -> LoRaKey {
-        let response = try await sendCommand("GET_LORA_KEY")
-        return try JSONDecoder().decode(LoRaKey.self, from: response.data(using: .utf8)!)
-    }
-
-    func setLoRaKey(_ key: LoRaKey) async throws {
-        let json = try JSONEncoder().encode(key)
-        let jsonString = String(data: json, encoding: .utf8)!
-        _ = try await self.sendCommand("SET_LORA_KEY \(jsonString)")
-    }
-
-    func getLoRaBands() async throws -> [LoRaBand] {
-        let response = try await sendCommand("GET_LORA_BANDS")
-        return try JSONDecoder().decode([LoRaBand].self, from: response.data(using: .utf8)!)
-    }
-
-    func getPairedDevices() async throws -> [PairedDevice] {
-        let response = try await sendCommand("GET_PAIRED_DEVICES")
-        return try JSONDecoder().decode([PairedDevice].self, from: response.data(using: .utf8)!)
-    }
-
-    func pairDevice(_ device: PairedDevice) async throws {
-        let json = try JSONEncoder().encode(device)
-        let jsonString = String(data: json, encoding: .utf8)!
-        _ = try await self.sendCommand("PAIR_DEVICE \(jsonString)")
-    }
-
-    func updatePairedDevice(_ device: PairedDevice) async throws {
-        let json = try JSONEncoder().encode(device)
-        let jsonString = String(data: json, encoding: .utf8)!
-        _ = try await self.sendCommand("UPDATE_PAIRED_DEVICE \(jsonString)")
-    }
-
-    func unpairDevice(mac: String) async throws {
-        let request = UnpairRequest(mac: mac)
-        let json = try JSONEncoder().encode(request)
-        let jsonString = String(data: json, encoding: .utf8)!
-        _ = try await self.sendCommand("UNPAIR_DEVICE \(jsonString)")
+        try await self.sendRequest(method: "device:info")
     }
 
     func factoryReset() async throws {
-        _ = try await self.sendCommand("FACTORY_RESET")
+        try await self.sendRequestVoid(method: "device:reset")
     }
 
-    func startFirmwareUpgrade(firmware: Data) async throws {
-        if self.connectionType == .ble {
-            // TODO: Integrate Nordic DFU library for BLE
-            throw ServiceError.notImplemented
-        } else {
-            #if os(macOS)
-            _ = try await self.sendCommand("FIRMWARE_UPGRADE \(firmware.count)")
-            // Wait for "OK Ready"
-            // Stream binary data
-            // Wait for "OK Complete"
-            throw ServiceError.notImplemented
-            #else
-            throw ServiceError.notImplemented
-            #endif
-        }
+    // MARK: - General Configuration
+
+    func getGeneral() async throws -> GeneralConfig {
+        try await self.sendRequest(method: "general:get")
+    }
+
+    func setGeneral(_ config: GeneralConfig) async throws {
+        try await self.sendRequestVoid(method: "general:set", params: config)
+    }
+
+    // MARK: - Power Management
+
+    func getPowerManagement() async throws -> PowerConfig {
+        try await self.sendRequest(method: "power:get")
+    }
+
+    func setPowerManagement(_ config: PowerConfig) async throws {
+        try await self.sendRequestVoid(method: "power:set", params: config)
+    }
+
+    // MARK: - LoRa Configuration
+
+    func getLoRa() async throws -> LoRaConfig {
+        try await self.sendRequest(method: "lora:get")
+    }
+
+    func setLoRa(_ config: LoRaConfig) async throws {
+        try await self.sendRequestVoid(method: "lora:set", params: config)
+    }
+
+    func getLoRaBands() async throws -> [LoRaBand] {
+        try await self.sendRequest(method: "lora:bands")
+    }
+
+    func getLoRaKey() async throws -> LoRaKey {
+        try await self.sendRequest(method: "lora:key:get")
+    }
+
+    func setLoRaKey(_ key: LoRaKey) async throws {
+        try await self.sendRequestVoid(method: "lora:key:set", params: key)
+    }
+
+    // MARK: - Device Pairing
+
+    func getPairedDevices() async throws -> [PairedDevice] {
+        try await self.sendRequest(method: "paired:list")
+    }
+
+    func addPairedDevice(_ device: PairedDevice) async throws {
+        try await self.sendRequestVoid(method: "paired:add", params: device)
+    }
+
+    func updatePairedDevice(_ device: PairedDevice) async throws {
+        try await self.sendRequestVoid(method: "paired:update", params: device)
+    }
+
+    func deletePairedDevice(mac: String) async throws {
+        try await self.sendRequestVoid(method: "paired:delete", params: ["mac": mac])
+    }
+
+    // MARK: - Firmware
+
+    func upgradeFirmware(size: Int) async throws {
+        try await self.sendRequestVoid(method: "firmware:upgrade", params: ["size": size])
     }
 }
 
-enum ServiceError: Error {
-    case notConnected
-    case deviceError(String)
-    case notImplemented
+// MARK: - Helper Types
+
+private struct JSONRPCResponse<T: Decodable>: Decodable {
+    let jsonrpc: String
+    let result: T?
+    let error: JSONRPCErrorResponse?
+    let id: Int
+}
+
+private struct JSONRPCErrorResponse: Decodable {
+    let code: Int
+    let message: String
+}
+
+private struct AnyEncodable: Encodable {
+    private let encode: (Encoder) throws -> Void
+
+    init(_ encodable: any Encodable) {
+        self.encode = encodable.encode
+    }
+
+    func encode(to encoder: Encoder) throws {
+        try self.encode(encoder)
+    }
 }

@@ -31,6 +31,7 @@ struct DeviceListView: View {
                             isConnected: self.bleManager?.connectedPeripheral?.identifier == peripheral.identifier
                         ) {
                             self.bleManager?.connect(to: peripheral)
+                            self.service.useBLETransport()
                             self.selectedDevice = peripheral.identifier.uuidString
                         } onFavorite: {
                             self.viewModel.toggleFavorite(peripheral.identifier.uuidString)
@@ -51,6 +52,7 @@ struct DeviceListView: View {
                             isConnected: self.usbManager.isConnected
                         ) {
                             try? self.usbManager.connect(to: path)
+                            self.service.useUSBTransport(self.usbManager)
                             self.selectedDevice = path
                         } onFavorite: {
                             self.viewModel.toggleFavorite(path)

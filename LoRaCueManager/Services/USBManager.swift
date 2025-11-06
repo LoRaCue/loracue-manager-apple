@@ -4,7 +4,7 @@ import IOKit
 import IOKit.serial
 
 @MainActor
-class USBManager: ObservableObject {
+class USBManager: ObservableObject, DeviceTransport {
     @Published var discoveredDevices: [String] = []
     @Published var isConnected = false
 

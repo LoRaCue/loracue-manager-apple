@@ -7,8 +7,7 @@ struct ContentView: View {
     var body: some View {
         Logger.ui.info(
             """
-            ContentView body: service=\(self.service.instanceId) \
-            bleManager=\(self.service.bleManager?.instanceId ?? "nil")
+            ContentView body: bleManager=\(self.service.bleManager.instanceId)
             """
         )
 

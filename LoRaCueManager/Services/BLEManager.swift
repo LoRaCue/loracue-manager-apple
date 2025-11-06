@@ -17,7 +17,7 @@ import OSLog
 /// ### Communication
 /// - ``sendCommand(_:)``
 @MainActor
-class BLEManager: NSObject, ObservableObject {
+class BLEManager: NSObject, ObservableObject, DeviceTransport {
     @Published var discoveredDevices: [CBPeripheral] = []
     @Published var isScanning = false
     @Published var connectedPeripheral: CBPeripheral?

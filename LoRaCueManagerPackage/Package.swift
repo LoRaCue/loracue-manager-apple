@@ -13,9 +13,15 @@ let package = Package(
             targets: ["LoRaCueManagerFeature"]
         )
     ],
+    dependencies: [
+        .package(url: "https://github.com/ChimeHQ/JSONRPC", from: "0.9.0")
+    ],
     targets: [
         .target(
             name: "LoRaCueManagerFeature",
+            dependencies: [
+                .product(name: "JSONRPC", package: "JSONRPC")
+            ],
             path: "Sources/LoRaCueManagerFeature"
         ),
         .testTarget(
