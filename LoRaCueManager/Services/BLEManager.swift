@@ -326,12 +326,16 @@ extension BLEManager: CBPeripheralDelegate {
                 let trimmed = self.responseBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
                 Logger.ble.info("📦 Accumulated response: \(trimmed.count) chars")
 
-                // Check for complete JSON object or array, or newline
+                // Check for complete response:
+                // 1. Contains newline
+                // 2. Complete JSON object or array
+                // 3. Plain text response (OK/ERROR)
                 let hasNewline = trimmed.contains("\n")
                 let isCompleteJSON = (trimmed.hasPrefix("{") && trimmed.hasSuffix("}")) ||
                     (trimmed.hasPrefix("[") && trimmed.hasSuffix("]"))
+                let isPlainText = trimmed.hasPrefix("OK ") || trimmed.hasPrefix("ERROR ")
 
-                if hasNewline || isCompleteJSON {
+                if hasNewline || isCompleteJSON || isPlainText {
                     Logger.ble.info("✅ Complete response: \(trimmed.prefix(100))...")
                     self.responseContinuation?.resume(returning: trimmed)
                     self.responseContinuation = nil
