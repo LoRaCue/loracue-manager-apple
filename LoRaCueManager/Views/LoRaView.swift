@@ -135,10 +135,7 @@ struct LoRaView: View {
             Text(self.viewModel.error ?? "")
         }
         #if os(macOS)
-        .formStyle(.grouped)
         .padding(32)
-        #else
-        .formStyle(.grouped)
         #endif
     }
     
@@ -239,10 +236,7 @@ struct AESKeyModal: View {
                 }
             }
             #if os(macOS)
-            .formStyle(.grouped)
             .padding(20)
-            #else
-            .formStyle(.grouped)
             #endif
             .navigationTitle("AES-256 Key")
             .toolbar {

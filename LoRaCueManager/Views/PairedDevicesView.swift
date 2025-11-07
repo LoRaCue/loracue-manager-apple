@@ -198,10 +198,7 @@ struct PairedDeviceModal: View {
                 }
             }
             #if os(macOS)
-            .formStyle(.grouped)
             .padding(20)
-            #else
-            .formStyle(.grouped)
             #endif
             .navigationTitle(self.device == nil ? "Add Device" : "Device Details")
             #if os(iOS)

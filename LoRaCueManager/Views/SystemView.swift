@@ -37,10 +37,7 @@ struct SystemView: View {
             }
         }
         #if os(macOS)
-        .formStyle(.grouped)
         .padding(32)
-        #else
-        .formStyle(.grouped)
         #endif
         .navigationTitle("System")
         .task {

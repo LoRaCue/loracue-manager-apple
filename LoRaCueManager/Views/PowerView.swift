@@ -55,10 +55,7 @@ struct PowerView: View {
             }
         }
         #if os(macOS)
-        .formStyle(.grouped)
         .padding(32)
-        #else
-        .formStyle(.grouped)
         #endif
         .navigationTitle("Power Management")
         .toolbar {
