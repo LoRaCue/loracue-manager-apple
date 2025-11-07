@@ -17,8 +17,8 @@ enum LoRaCalculator {
 
         // Range calculation (Friis transmission equation approximation)
         let frequency = 868.0 // MHz (default EU868)
-        let pathLossExponent = 2.0
-        let receiverSensitivity = -137.0 + Double(sf - 7) * 2.5
+        let pathLossExponent = 3.5 // Indoor/urban environment (realistic for stadiums/auditoriums)
+        let receiverSensitivity = -137.0 - Double(sf - 7) * 2.5
 
         let pathLoss = Double(txPower) - receiverSensitivity
         let range = Int(pow(10.0, (pathLoss - 20.0 * log10(frequency) - 32.44) / (10.0 * pathLossExponent)))
