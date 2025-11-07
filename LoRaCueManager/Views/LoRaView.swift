@@ -1,26 +1,16 @@
 import SwiftUI
 
 struct LoRaView: View {
-    @StateObject private var viewModel: LoRaViewModel
+    @ObservedObject var viewModel: LoRaViewModel
     @State private var showAESKeyModal = false
     @State private var showBandWarning = false
     @State private var aesKey = ""
 
-    init(service: LoRaCueService) {
-        _viewModel = StateObject(wrappedValue: LoRaViewModel(service: service))
-    }
-
     var body: some View {
         Form {
             if let config = viewModel.config {
-                Section("Quick Presets") {
-                    ForEach(LoRaPreset.presets, id: \.name) { preset in
-                        Button(preset.name) {
-                            self.viewModel.applyPreset(preset)
-                        }
-                    }
-                }
-
+                presetsSection(config: config)
+                
                 Section("Hardware Band") {
                     Picker("Band", selection: Binding(
                         get: { config.bandId },
@@ -93,23 +83,43 @@ struct LoRaView: View {
                 }
 
                 Section("Encryption") {
-                    Button("Set AES Key") {
-                        self.showAESKeyModal = true
+                    Button {
+                        Task {
+                            if let key = try? await self.viewModel.service.getLoRaKey() {
+                                self.aesKey = key.aesKey
+                            }
+                            self.showAESKeyModal = true
+                        }
+                    } label: {
+                        HStack {
+                            Text("AES-256 Key")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
-                }
-
-                Section {
-                    Button("Save") {
-                        Task { await self.viewModel.save() }
-                    }
-                    .disabled(self.viewModel.isLoading)
+                    .buttonStyle(.plain)
                 }
             } else {
                 ProgressView()
             }
         }
         .navigationTitle("LoRa Configuration")
-        .task { await self.viewModel.load() }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Save") {
+                    Task { await self.viewModel.save() }
+                }
+                .disabled(self.viewModel.isLoading)
+            }
+        }
+        .task {
+            while !self.viewModel.service.isReady {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+            await self.viewModel.load()
+        }
         .alert("Band Warning", isPresented: self.$showBandWarning) {
             Button("OK") {}
         } message: {
@@ -117,11 +127,40 @@ struct LoRaView: View {
         }
         .sheet(isPresented: self.$showAESKeyModal) {
             AESKeyModal(aesKey: self.$aesKey, service: self.viewModel.service)
+                .presentationDetents([.medium])
         }
         .alert("Error", isPresented: .constant(self.viewModel.error != nil)) {
             Button("OK") { self.viewModel.error = nil }
         } message: {
             Text(self.viewModel.error ?? "")
+        }
+        .formStyle(.grouped)
+        #if os(macOS)
+        .padding(32)
+        #endif
+    }
+    
+    // MARK: - Helper Views
+    
+    @ViewBuilder
+    private func presetsSection(config: LoRaConfig) -> some View {
+        Section {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(LoRaPreset.presets, id: \.name) { preset in
+                        PresetCard(
+                            preset: preset,
+                            isSelected: config.spreadingFactor == preset.sf && config.bandwidth == preset.bw
+                        ) {
+                            self.viewModel.applyPreset(preset)
+                        }
+                    }
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 8)
+            }
+        } header: {
+            Text("Quick Presets")
         }
     }
 }
@@ -130,6 +169,11 @@ struct AESKeyModal: View {
     @Binding var aesKey: String
     @Environment(\.dismiss) var dismiss
     let service: LoRaCueService
+    @State private var originalKey: String = ""
+    
+    private var isDirty: Bool {
+        aesKey != originalKey && aesKey.count == 64
+    }
 
     var body: some View {
         NavigationStack {
@@ -158,7 +202,7 @@ struct AESKeyModal: View {
                     .disabled(self.aesKey.count != 64)
                 }
             }
-            .navigationTitle("Set AES Key")
+            .navigationTitle("AES-256 Key")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { self.dismiss() }
@@ -170,9 +214,45 @@ struct AESKeyModal: View {
                             self.dismiss()
                         }
                     }
-                    .disabled(self.aesKey.count != 64)
+                    .foregroundStyle(.blue)
+                    .fontWeight(isDirty ? .semibold : .regular)
+                    .opacity(isDirty ? 1.0 : 0.4)
+                    .disabled(!isDirty)
                 }
             }
+            .onAppear {
+                originalKey = aesKey
+            }
         }
+    }
+}
+
+// MARK: - Preset Card Component
+
+private struct PresetCard: View {
+    let preset: LoRaPreset
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(preset.name)
+                    .font(.headline)
+                    .foregroundColor(isSelected ? .white : .primary)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("SF\(preset.sf)")
+                        .font(.caption)
+                    Text("\(preset.bw / 1000) kHz")
+                        .font(.caption)
+                }
+                .foregroundColor(isSelected ? .white.opacity(0.9) : .secondary)
+            }
+            .frame(width: 130, height: 80)
+            .background(isSelected ? Color.blue : Color.gray.opacity(0.2))
+            .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
     }
 }

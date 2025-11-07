@@ -2,8 +2,6 @@ import SwiftUI
 
 struct SystemView: View {
     @StateObject private var viewModel: SystemViewModel
-    @State private var showResetConfirmation = false
-    @State private var showFinalConfirmation = false
 
     init(service: LoRaCueService) {
         _viewModel = StateObject(wrappedValue: SystemViewModel(service: service))
@@ -13,6 +11,7 @@ struct SystemView: View {
         Form {
             if let info = viewModel.deviceInfo {
                 Section("Device Information") {
+                    InfoRow(label: "Model", value: info.model)
                     InfoRow(label: "Board ID", value: info.boardId)
                     InfoRow(label: "Version", value: info.version)
                     InfoRow(label: "Commit", value: info.commit)
@@ -21,7 +20,7 @@ struct SystemView: View {
                 }
 
                 Section("Hardware") {
-                    InfoRow(label: "Chip Model", value: info.chipModel)
+                    InfoRow(label: "Chip", value: info.chipModel)
                     InfoRow(label: "Chip Revision", value: "\(info.chipRevision)")
                     InfoRow(label: "CPU Cores", value: "\(info.cpuCores)")
                     InfoRow(label: "Flash Size", value: "\(info.flashSizeMb) MB")
@@ -33,35 +32,20 @@ struct SystemView: View {
                     InfoRow(label: "Free Heap", value: "\(info.freeHeapKb) KB")
                     InfoRow(label: "Partition", value: info.partition)
                 }
-
-                Section {
-                    Button(role: .destructive) {
-                        self.showResetConfirmation = true
-                    } label: {
-                        Label("Factory Reset", systemImage: "exclamationmark.triangle")
-                    }
-                }
             } else {
                 ProgressView()
             }
         }
+        .formStyle(.grouped)
+        #if os(macOS)
+        .padding(32)
+        #endif
         .navigationTitle("System")
-        .task { await self.viewModel.load() }
-        .alert("Factory Reset", isPresented: self.$showResetConfirmation) {
-            Button("Cancel", role: .cancel) {}
-            Button("Continue", role: .destructive) {
-                self.showFinalConfirmation = true
+        .task {
+            while !self.viewModel.service.isReady {
+                try? await Task.sleep(nanoseconds: 100_000_000)
             }
-        } message: {
-            Text("This will erase all device settings and reboot. Are you sure?")
-        }
-        .alert("Final Confirmation", isPresented: self.$showFinalConfirmation) {
-            Button("Cancel", role: .cancel) {}
-            Button("Reset Now", role: .destructive) {
-                Task { await self.viewModel.factoryReset() }
-            }
-        } message: {
-            Text("This action cannot be undone. All settings will be permanently erased.")
+            await self.viewModel.load()
         }
         .alert("Error", isPresented: .constant(self.viewModel.error != nil)) {
             Button("OK") { self.viewModel.error = nil }
