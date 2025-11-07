@@ -54,6 +54,9 @@ struct PowerView: View {
                 ProgressView()
             }
         }
+        #if os(iOS)
+        .formStyle(.grouped)
+        #endif
         #if os(macOS)
         .padding(32)
         #endif
