@@ -202,6 +202,10 @@ struct AESKeyModal: View {
                     .disabled(self.aesKey.count != 64)
                 }
             }
+            .formStyle(.grouped)
+            #if os(macOS)
+            .padding()
+            #endif
             .navigationTitle("AES-256 Key")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
