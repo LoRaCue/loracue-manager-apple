@@ -22,7 +22,20 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
     @Published var isScanning = false
     @Published var connectedPeripheral: CBPeripheral?
     @Published var connectionState: CBPeripheralState = .disconnected
-    @Published var isReady = false
+    @Published var bluetoothState: CBManagerState = .unknown
+    @Published private var _isReady = false
+
+    nonisolated var isReady: Bool {
+        MainActor.assumeIsolated {
+            self._isReady
+        }
+    }
+
+    nonisolated var isConnected: Bool {
+        MainActor.assumeIsolated {
+            self.connectedPeripheral != nil
+        }
+    }
 
     var onConnectionChanged: (() -> Void)?
 
@@ -111,13 +124,13 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
         }
 
         // Wait for device to be ready (max 5 seconds)
-        if !self.isReady {
+        if !self._isReady {
             Logger.ble.info("⏳ Waiting for device to be ready...")
             for _ in 0 ..< 50 {
-                if self.isReady { break }
+                if self._isReady { break }
                 try await Task.sleep(nanoseconds: 100_000_000) // 100ms
             }
-            if !self.isReady {
+            if !self._isReady {
                 Logger.ble.error("❌ Device not ready after 5 seconds")
                 throw BLEError.notConnected
             }
@@ -161,6 +174,7 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
 extension BLEManager: CBCentralManagerDelegate {
     nonisolated func centralManagerDidUpdateState(_ central: CBCentralManager) {
         Task { @MainActor in
+            self.bluetoothState = central.state
             Logger.ble.info("📡 Bluetooth state changed to: \(central.state.rawValue)")
             switch central.state {
             case .poweredOn:
@@ -228,7 +242,7 @@ extension BLEManager: CBCentralManagerDelegate {
             self.connectionState = .disconnected
             self.txCharacteristic = nil
             self.rxCharacteristic = nil
-            self.isReady = false
+            self._isReady = false
         }
     }
 }
@@ -294,7 +308,7 @@ extension BLEManager: CBPeripheralDelegate {
                 }
             }
             if self.txCharacteristic != nil, self.rxCharacteristic != nil {
-                self.isReady = true
+                self._isReady = true
                 Logger.ble.info("🎉 Device fully ready for communication")
             }
         }

@@ -6,7 +6,19 @@ import IOKit.serial
 @MainActor
 class USBManager: ObservableObject, DeviceTransport {
     @Published var discoveredDevices: [String] = []
-    @Published var isConnected = false
+    @Published private var _isConnected = false
+
+    nonisolated var isConnected: Bool {
+        MainActor.assumeIsolated {
+            self._isConnected
+        }
+    }
+
+    nonisolated var isReady: Bool {
+        MainActor.assumeIsolated {
+            self._isConnected
+        }
+    }
 
     private var fileDescriptor: Int32 = -1
     private let targetVID: UInt16 = 0x1209
@@ -57,7 +69,7 @@ class USBManager: ObservableObject, DeviceTransport {
         options.c_lflag = 0
 
         tcsetattr(self.fileDescriptor, TCSANOW, &options)
-        self.isConnected = true
+        self._isConnected = true
     }
 
     func disconnect() {
@@ -65,7 +77,7 @@ class USBManager: ObservableObject, DeviceTransport {
             close(self.fileDescriptor)
             self.fileDescriptor = -1
         }
-        self.isConnected = false
+        self._isConnected = false
     }
 
     func sendCommand(_ command: String) async throws -> String {

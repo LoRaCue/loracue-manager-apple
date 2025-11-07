@@ -9,8 +9,8 @@ struct LoRaView: View {
     var body: some View {
         Form {
             if let config = viewModel.config {
-                presetsSection(config: config)
-                
+                self.presetsSection(config: config)
+
                 Section("Hardware Band") {
                     Picker("Band", selection: Binding(
                         get: { config.bandId },
@@ -138,12 +138,14 @@ struct LoRaView: View {
         .formStyle(.grouped)
         #endif
         #if os(macOS)
-        .padding(32)
+        .padding(.horizontal, 32)
+        .padding(.top, 0)
+        .padding(.bottom, 32)
         #endif
     }
-    
+
     // MARK: - Helper Views
-    
+
     @ViewBuilder
     private func presetsSection(config: LoRaConfig) -> some View {
         Section {
@@ -171,11 +173,11 @@ struct AESKeyModal: View {
     @Binding var aesKey: String
     @Environment(\.dismiss) var dismiss
     let service: LoRaCueService
-    @State private var originalKey: String = ""
+    @State private var originalKey = ""
     @State private var showKey = false
-    
+
     private var isDirty: Bool {
-        aesKey != originalKey && aesKey.count == 64
+        self.aesKey != self.originalKey && self.aesKey.count == 64
     }
 
     var body: some View {
@@ -198,7 +200,7 @@ struct AESKeyModal: View {
                                 .lineLimit(1)
                             Spacer()
                         }
-                        
+
                         Button {
                             self.showKey.toggle()
                         } label: {
@@ -230,8 +232,8 @@ struct AESKeyModal: View {
                     }
                     .buttonStyle(.borderless)
                 }
-                
-                if self.aesKey.count > 0 && self.aesKey.count != 64 {
+
+                if !self.aesKey.isEmpty, self.aesKey.count != 64 {
                     Section {
                         Label("Key must be exactly 64 hex characters", systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.orange)
@@ -254,13 +256,13 @@ struct AESKeyModal: View {
                         }
                     }
                     .foregroundStyle(.blue)
-                    .fontWeight(isDirty ? .semibold : .regular)
-                    .opacity(isDirty ? 1.0 : 0.4)
-                    .disabled(!isDirty)
+                    .fontWeight(self.isDirty ? .semibold : .regular)
+                    .opacity(self.isDirty ? 1.0 : 0.4)
+                    .disabled(!self.isDirty)
                 }
             }
             .onAppear {
-                originalKey = aesKey
+                self.originalKey = self.aesKey
             }
         }
     }
@@ -272,24 +274,24 @@ private struct PresetCard: View {
     let preset: LoRaPreset
     let isSelected: Bool
     let action: () -> Void
-    
+
     var body: some View {
-        Button(action: action) {
+        Button(action: self.action) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(preset.name)
+                Text(self.preset.name)
                     .font(.headline)
-                    .foregroundColor(isSelected ? .white : .primary)
-                
+                    .foregroundColor(self.isSelected ? .white : .primary)
+
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("SF\(preset.sf)")
+                    Text("SF\(self.preset.sf)")
                         .font(.caption)
-                    Text("\(preset.bw / 1000) kHz")
+                    Text("\(self.preset.bw / 1000) kHz")
                         .font(.caption)
                 }
-                .foregroundColor(isSelected ? .white.opacity(0.9) : .secondary)
+                .foregroundColor(self.isSelected ? .white.opacity(0.9) : .secondary)
             }
             .frame(width: 130, height: 80)
-            .background(isSelected ? Color.blue : Color.gray.opacity(0.2))
+            .background(self.isSelected ? Color.blue : Color.gray.opacity(0.2))
             .cornerRadius(12)
         }
         .buttonStyle(.plain)

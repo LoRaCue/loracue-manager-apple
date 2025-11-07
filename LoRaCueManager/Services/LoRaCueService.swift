@@ -7,12 +7,24 @@ class LoRaCueService: ObservableObject {
     let bleManager: BLEManager
     private var transport: DeviceTransport
     private var requestId = 0
+    private var isProcessingRequest = false
     private let logger = Logger(subsystem: "com.loracue.manager", category: "JSONRPCService")
+
+    var isReady: Bool {
+        self.transport.isReady
+    }
 
     init(bleManager: BLEManager) {
         self.bleManager = bleManager
         self.transport = bleManager
     }
+
+    #if targetEnvironment(simulator)
+    init(transport: DeviceTransport, bleManager: BLEManager) {
+        self.bleManager = bleManager
+        self.transport = transport
+    }
+    #endif
 
     /// Switch to USB transport
     #if os(macOS)
@@ -32,6 +44,14 @@ class LoRaCueService: ObservableObject {
         method: String,
         params: (any Encodable)? = nil
     ) async throws -> T {
+        // Serialize requests through a queue
+        while self.isProcessingRequest {
+            try await Task.sleep(nanoseconds: 50_000_000) // 50ms
+        }
+
+        self.isProcessingRequest = true
+        defer { isProcessingRequest = false }
+
         self.requestId += 1
         let id = self.requestId
 
@@ -148,7 +168,7 @@ class LoRaCueService: ObservableObject {
     }
 
     func updatePairedDevice(_ device: PairedDevice) async throws {
-        try await self.sendRequestVoid(method: "paired:update", params: device)
+        try await self.sendRequestVoid(method: "paired:pair", params: device)
     }
 
     func deletePairedDevice(mac: String) async throws {

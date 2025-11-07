@@ -6,6 +6,7 @@ import Foundation
 ///
 /// Contains hardware details, firmware version, and runtime statistics.
 struct DeviceInfo: Codable {
+    let model: String
     let boardId: String
     let version: String
     let commit: String
@@ -21,6 +22,7 @@ struct DeviceInfo: Codable {
     let partition: String
 
     enum CodingKeys: String, CodingKey {
+        case model
         case boardId = "board_id"
         case version
         case commit
@@ -39,7 +41,7 @@ struct DeviceInfo: Codable {
 
 // MARK: - General Config
 
-struct GeneralConfig: Codable {
+struct GeneralConfig: Codable, Equatable {
     var name: String
     var mode: String
     var brightness: Int
@@ -57,7 +59,7 @@ struct GeneralConfig: Codable {
 
 // MARK: - Power Config
 
-struct PowerConfig: Codable {
+struct PowerConfig: Codable, Equatable {
     var displaySleepEnabled: Bool
     var displaySleepTimeoutMs: Int
     var lightSleepEnabled: Bool
@@ -77,7 +79,7 @@ struct PowerConfig: Codable {
 
 // MARK: - LoRa Config
 
-struct LoRaConfig: Codable {
+struct LoRaConfig: Codable, Equatable {
     var bandId: String
     var frequency: Int
     var spreadingFactor: Int

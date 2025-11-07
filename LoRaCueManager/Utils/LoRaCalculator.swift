@@ -19,15 +19,18 @@ enum LoRaCalculator {
         // SX1262 sensitivity: -148 dBm @ SF12/BW125, improves ~2.5dB per SF step down
         let sensitivity = -148.0 + Double(12 - sf) * 2.5 + (bw > 125_000 ? log2(Double(bw) / 125_000.0) * 3.0 : 0.0)
         let linkBudget = Double(txPower) - sensitivity
-        
+
         // Indoor path loss model with heavy attenuation
         let fadeMargin = 20.0 // dB - conservative for reliability
         let pathLossExponent = 3.5 // Heavy indoor attenuation (concrete walls, multiple floors)
         let referenceDistance = 1.0 // meters
         let referenceLoss = 50.0 // dB at 1m (realistic for indoor 868 MHz)
-        
+
         // Solve for distance: d = d0 * 10^((linkBudget - fadeMargin - PL0) / (10*n))
-        let range = Int(referenceDistance * pow(10.0, (linkBudget - fadeMargin - referenceLoss) / (10.0 * pathLossExponent)))
+        let range = Int(referenceDistance * pow(
+            10.0,
+            (linkBudget - fadeMargin - referenceLoss) / (10.0 * pathLossExponent)
+        ))
 
         return (latency: timeOnAir, range: range)
     }

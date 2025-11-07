@@ -1,5 +1,5 @@
-import SwiftUI
 import OSLog
+import SwiftUI
 
 struct PairedDevicesView: View {
     @StateObject private var viewModel: PairedDevicesViewModel
@@ -24,15 +24,15 @@ struct PairedDevicesView: View {
                             .font(.title2)
                             .foregroundStyle(.blue)
                             .frame(width: 40)
-                        
+
                         VStack(alignment: .leading, spacing: 4) {
                             Text(device.name)
                                 .font(.headline)
-                            
+
                             Text(device.mac)
                                 .font(.system(.caption, design: .monospaced))
                                 .foregroundStyle(.secondary)
-                            
+
                             HStack(spacing: 4) {
                                 Image(systemName: "key.fill")
                                     .font(.caption2)
@@ -41,9 +41,9 @@ struct PairedDevicesView: View {
                             }
                             .foregroundStyle(.green)
                         }
-                        
+
                         Spacer()
-                        
+
                         Button {
                             self.editingDevice = device
                         } label: {
@@ -106,10 +106,11 @@ struct PairedDeviceModal: View {
     @State private var originalMac = ""
     @State private var originalKey = ""
     @Environment(\.dismiss) var dismiss
-    
+
     private var isDirty: Bool {
-        let isValid = !name.isEmpty && mac.count == 17 && aesKey.count == 64
-        let hasChanges = name != originalName || mac != originalMac || aesKey != originalKey
+        let isValid = !self.name.isEmpty && self.mac.count == 17 && self.aesKey.count == 64
+        let hasChanges = self.name != self.originalName || self.mac != self.originalMac || self.aesKey != self
+            .originalKey
         return isValid && hasChanges
     }
 
@@ -157,7 +158,7 @@ struct PairedDeviceModal: View {
                                 .lineLimit(1)
                             Spacer()
                         }
-                        
+
                         Button {
                             self.showKey.toggle()
                         } label: {
@@ -189,8 +190,8 @@ struct PairedDeviceModal: View {
                     }
                     .buttonStyle(.borderless)
                 }
-                
-                if self.aesKey.count > 0 && self.aesKey.count != 64 {
+
+                if !self.aesKey.isEmpty, self.aesKey.count != 64 {
                     Section {
                         Label("Key must be exactly 64 hex characters", systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.orange)
@@ -202,30 +203,30 @@ struct PairedDeviceModal: View {
             #endif
             .navigationTitle(self.device == nil ? "Add Device" : "Device Details")
             #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
+                .navigationBarTitleDisplayMode(.inline)
             #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { self.dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        Task {
-                            let pairedDevice = PairedDevice(name: name, mac: mac, aesKey: aesKey)
-                            if self.device == nil {
-                                await self.viewModel.add(pairedDevice)
-                            } else {
-                                await self.viewModel.update(pairedDevice)
-                            }
-                            self.dismiss()
-                        }
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { self.dismiss() }
                     }
-                    .foregroundStyle(.blue)
-                    .fontWeight(isDirty ? .semibold : .regular)
-                    .opacity(isDirty ? 1.0 : 0.4)
-                    .disabled(!isDirty)
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            Task {
+                                let pairedDevice = PairedDevice(name: name, mac: mac, aesKey: aesKey)
+                                if self.device == nil {
+                                    await self.viewModel.add(pairedDevice)
+                                } else {
+                                    await self.viewModel.update(pairedDevice)
+                                }
+                                self.dismiss()
+                            }
+                        }
+                        .foregroundStyle(.blue)
+                        .fontWeight(self.isDirty ? .semibold : .regular)
+                        .opacity(self.isDirty ? 1.0 : 0.4)
+                        .disabled(!self.isDirty)
+                    }
                 }
-            }
         }
         .onAppear {
             Logger.ui.info("📝 PairedDeviceModal appeared - device: \(self.device?.name ?? "nil")")
@@ -235,9 +236,9 @@ struct PairedDeviceModal: View {
                 self.aesKey = device.aesKey
                 Logger.ui.info("📝 Loaded device data: name=\(device.name), mac=\(device.mac)")
             }
-            originalName = name
-            originalMac = mac
-            originalKey = aesKey
+            self.originalName = self.name
+            self.originalMac = self.mac
+            self.originalKey = self.aesKey
         }
     }
 }
