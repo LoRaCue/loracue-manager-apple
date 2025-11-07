@@ -136,7 +136,8 @@ struct LoRaView: View {
         }
         .formStyle(.grouped)
         #if os(macOS)
-        .padding(32)
+        .padding(.horizontal, 32)
+        .padding(.vertical, 16)
         #endif
     }
     
@@ -237,9 +238,6 @@ struct AESKeyModal: View {
                 }
             }
             .formStyle(.grouped)
-            #if os(macOS)
-            .padding()
-            #endif
             .navigationTitle("AES-256 Key")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
