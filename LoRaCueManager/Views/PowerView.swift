@@ -54,10 +54,11 @@ struct PowerView: View {
                 ProgressView()
             }
         }
-        .formStyle(.grouped)
         #if os(macOS)
-        .padding(.horizontal, 32)
-        .padding(.vertical, 16)
+        .formStyle(.grouped)
+        .padding(32)
+        #else
+        .formStyle(.grouped)
         #endif
         .navigationTitle("Power Management")
         .toolbar {
