@@ -29,7 +29,7 @@ struct LoRaView: View {
                 }
 
                 Section("Parameters") {
-                    VStack(alignment: .leading) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("Frequency: \(config.frequency / 1000) MHz")
                         Slider(value: Binding(
                             get: { Double(config.frequency) },
