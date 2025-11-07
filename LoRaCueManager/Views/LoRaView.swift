@@ -170,6 +170,7 @@ struct AESKeyModal: View {
     @Environment(\.dismiss) var dismiss
     let service: LoRaCueService
     @State private var originalKey: String = ""
+    @State private var showKey = false
     
     private var isDirty: Bool {
         aesKey != originalKey && aesKey.count == 64
@@ -178,28 +179,61 @@ struct AESKeyModal: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    TextField("64-character hex key", text: self.$aesKey)
-                    #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                    #endif
-                        .autocorrectionDisabled()
+                Section("AES-256 Encryption Key") {
+                    HStack {
+                        if self.showKey {
+                            TextField("64 hex characters", text: self.$aesKey, axis: .horizontal)
+                            #if os(iOS)
+                                .textInputAutocapitalization(.never)
+                            #endif
+                                .autocorrectionDisabled()
+                                .font(.system(.body, design: .monospaced))
+                                .lineLimit(1)
+                        } else {
+                            Text(String(repeating: "•", count: 64))
+                                .font(.system(.body, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            Spacer()
+                        }
+                        
+                        Button {
+                            self.showKey.toggle()
+                        } label: {
+                            Image(systemName: self.showKey ? "eye.slash" : "eye")
+                        }
+                    }
+
+                    HStack {
+                        Button {
+                            self.aesKey = LoRaCalculator.generateRandomAESKey()
+                            self.showKey = true
+                        } label: {
+                            Label("Generate Random", systemImage: "dice")
+                        }
+
+                        Spacer()
+
+                        Button {
+                            #if os(iOS)
+                            UIPasteboard.general.string = self.aesKey
+                            #else
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(self.aesKey, forType: .string)
+                            #endif
+                        } label: {
+                            Label("Copy", systemImage: "doc.on.doc")
+                        }
+                        .disabled(self.aesKey.count != 64)
+                    }
+                    .buttonStyle(.borderless)
                 }
-
-                Section {
-                    Button("Generate Random Key") {
-                        self.aesKey = LoRaCalculator.generateRandomAESKey()
+                
+                if self.aesKey.count > 0 && self.aesKey.count != 64 {
+                    Section {
+                        Label("Key must be exactly 64 hex characters", systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
                     }
-
-                    Button("Copy to Clipboard") {
-                        #if os(iOS)
-                        UIPasteboard.general.string = self.aesKey
-                        #else
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(self.aesKey, forType: .string)
-                        #endif
-                    }
-                    .disabled(self.aesKey.count != 64)
                 }
             }
             .formStyle(.grouped)
