@@ -102,10 +102,6 @@ struct DeviceListView: View {
                                             Text(version)
                                                 .font(.system(.caption, design: .monospaced))
                                                 .foregroundStyle(.secondary)
-                                        } else {
-                                            Text(peripheral.identifier.uuidString)
-                                                .font(.system(.caption, design: .monospaced))
-                                                .foregroundStyle(.secondary)
                                         }
 
                                         if self.bleManager.connectedPeripheral?.identifier == peripheral.identifier {
@@ -370,7 +366,7 @@ struct DeviceListView: View {
         DeviceRow(
             name: advData?.model ?? self.deviceDisplayName(peripheral.name ?? "Unknown"),
             type: "BLE",
-            detail: advData?.version ?? peripheral.identifier.uuidString,
+            detail: advData?.version ?? "",
             isConnected: isConnected
         ) {
             self.handleDeviceTap(peripheral: peripheral, isConnected: isConnected)
