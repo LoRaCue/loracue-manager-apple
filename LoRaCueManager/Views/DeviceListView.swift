@@ -1,6 +1,9 @@
 import CoreBluetooth
 import OSLog
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 struct DeviceListView: View {
     @ObservedObject var service: LoRaCueService
@@ -53,7 +56,8 @@ struct DeviceListView: View {
                     .padding(.vertical, 4)
                 }
             }
-            .navigationTitle("Devices")
+            .navigationTitle("LoRaCue Manager")
+            .navigationBarTitleDisplayMode(.large)
             .navigationDestination(for: String.self) { _ in
                 DeviceDetailView(service: self.service)
             }
@@ -124,16 +128,27 @@ struct DeviceListView: View {
 
                         if self.sortedBLEDevices.isEmpty {
                             ContentUnavailableView {
-                                Label("No Devices", systemImage: "antenna.radiowaves.left.and.right.slash")
+                                VStack(spacing: 16) {
+                                    Image(systemName: "antenna.radiowaves.left.and.right")
+                                        .font(.system(size: 48))
+                                        .foregroundColor(.secondary)
+
+                                    Text("No Devices Found")
+                                        .font(.title2)
+                                        .fontWeight(.semibold)
+                                }
                             } description: {
-                                Text("Pull down to scan for nearby LoRaCue devices")
+                                Text("Pull down to scan for nearby devices")
+                                    .multilineTextAlignment(.center)
                             }
                         }
                     }
                     .refreshable {
                         self.scan()
-                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        try? await Task.sleep(nanoseconds: 10_000_000_000) // 10s scan
+                        self.bleManager.stopScanning()
                     }
+                    #if !os(iOS)
                     .toolbar {
                         ToolbarItem(placement: .primaryAction) {
                             if self.bleManager.connectedPeripheral != nil {
@@ -153,14 +168,34 @@ struct DeviceListView: View {
                             }
                         }
                     }
+                    #endif
                 }
             }
-            .navigationTitle("Devices")
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 8) {
+                        Image(uiImage: UIImage(named: "AppIcon") ?? UIImage())
+                            .resizable()
+                            .frame(width: 28, height: 28)
+                            .cornerRadius(6)
+                        Text("LoRaCue Manager")
+                            .font(.headline)
+                    }
+                }
+            }
             .navigationDestination(isPresented: Binding(
                 get: { self.selectedDevice != nil },
                 set: { if !$0 { self.selectedDevice = nil } }
             )) {
                 DeviceDetailView(service: self.service)
+            }
+            .task {
+                // Only scan once on initial app launch
+                if !self.bleManager.isScanning, self.bleManager.discoveredDevices.isEmpty {
+                    self.scan()
+                    try? await Task.sleep(nanoseconds: 10_000_000_000) // 10s auto-stop
+                    self.bleManager.stopScanning()
+                }
             }
             #endif
         }
@@ -206,22 +241,56 @@ struct DeviceListView: View {
             if self.sortedBLEDevices.isEmpty {
                 #if os(macOS)
                 if self.usbManager.discoveredDevices.isEmpty {
-                    ContentUnavailableView(
-                        "No Devices Found",
-                        systemImage: "antenna.radiowaves.left.and.right.slash",
-                        description: Text("Tap Scan to search for devices")
-                    )
+                    ContentUnavailableView {
+                        VStack(spacing: 16) {
+                            #if os(macOS)
+                            Image(nsImage: NSImage(named: "AppIcon") ?? NSImage())
+                                .resizable()
+                                .frame(width: 80, height: 80)
+                                .cornerRadius(18)
+                            #else
+                            Image(uiImage: UIImage(named: "AppIcon") ?? UIImage())
+                                .resizable()
+                                .frame(width: 80, height: 80)
+                                .cornerRadius(18)
+                            #endif
+
+                            Text("LoRaCue Manager")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                        }
+                    } description: {
+                        Text("No devices found\nClick Scan to search for LoRaCue devices")
+                            .multilineTextAlignment(.center)
+                    }
                 }
                 #else
-                ContentUnavailableView(
-                    "No Devices Found",
-                    systemImage: "antenna.radiowaves.left.and.right.slash",
-                    description: Text("Tap Scan to search for devices")
-                )
+                ContentUnavailableView {
+                    VStack(spacing: 16) {
+                        #if os(macOS)
+                        Image(nsImage: NSImage(named: "AppIcon") ?? NSImage())
+                            .resizable()
+                            .frame(width: 80, height: 80)
+                            .cornerRadius(18)
+                        #else
+                        Image(uiImage: UIImage(named: "AppIcon") ?? UIImage())
+                            .resizable()
+                            .frame(width: 80, height: 80)
+                            .cornerRadius(18)
+                        #endif
+
+                        Text("LoRaCue Manager")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                    }
+                } description: {
+                    Text("No devices found\nClick Scan to search for LoRaCue devices")
+                        .multilineTextAlignment(.center)
+                }
                 #endif
             }
         }
-        .navigationTitle("Devices")
+        .navigationTitle("LoRaCue Manager")
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Button(action: self.scan) {
@@ -241,7 +310,15 @@ struct DeviceListView: View {
     // MARK: - Helpers
 
     private var sortedBLEDevices: [CBPeripheral] {
-        let all = self.bleManager.discoveredDevices
+        var all = self.bleManager.discoveredDevices
+
+        // Always include connected device even if not advertising
+        if let connected = self.bleManager.connectedPeripheral,
+           !all.contains(where: { $0.identifier == connected.identifier })
+        {
+            all.append(connected)
+        }
+
         return all.filter { ($0.name ?? "").hasPrefix("LoRaCue") }
             .sorted { ($0.name ?? "") < ($1.name ?? "") }
     }

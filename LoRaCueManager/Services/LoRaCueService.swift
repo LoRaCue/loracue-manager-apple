@@ -42,8 +42,14 @@ class LoRaCueService: ObservableObject {
 
     private func sendRequest<T: Decodable>(
         method: String,
-        params: (any Encodable)? = nil
+        params: (any Encodable)? = nil,
+        retryCount: Int = 0
     ) async throws -> T {
+        // Fast-fail if transport not ready
+        guard self.transport.isReady else {
+            throw JSONRPCError.transportError("Device not connected")
+        }
+
         // Serialize requests through a queue
         while self.isProcessingRequest {
             try await Task.sleep(nanoseconds: 50_000_000) // 50ms
@@ -52,6 +58,31 @@ class LoRaCueService: ObservableObject {
         self.isProcessingRequest = true
         defer { isProcessingRequest = false }
 
+        do {
+            return try await self.sendRequestInternal(method: method, params: params)
+        } catch let error as JSONRPCError {
+            // Determine if error is retryable
+            let isRetryable = self.isRetryableError(error)
+            let maxRetries = 2
+
+            if isRetryable, retryCount < maxRetries {
+                let delay = UInt64(pow(2.0, Double(retryCount)) * 100_000_000) // 100ms, 200ms
+                self.logger
+                    .warning(
+                        "⚠️ Retrying \(method) (attempt \(retryCount + 1)/\(maxRetries)) after \(delay / 1_000_000)ms"
+                    )
+                try await Task.sleep(nanoseconds: delay)
+                return try await self.sendRequest(method: method, params: params, retryCount: retryCount + 1)
+            }
+
+            throw error
+        }
+    }
+
+    private func sendRequestInternal<T: Decodable>(
+        method: String,
+        params: (any Encodable)? = nil
+    ) async throws -> T {
         self.requestId += 1
         let id = self.requestId
 
@@ -77,11 +108,26 @@ class LoRaCueService: ObservableObject {
         let responseString = try await transport.sendCommand(requestString)
         self.logger.info("📥 JSON-RPC Response: \(responseString)")
 
+        // Validate response is not empty
+        guard !responseString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            self.logger.error("❌ Empty response received")
+            throw JSONRPCError.transportError("Empty response from device")
+        }
+
         guard let responseData = responseString.data(using: .utf8) else {
+            self.logger.error("❌ Response not valid UTF-8")
             throw JSONRPCError.parseError
         }
 
-        let response = try JSONDecoder().decode(JSONRPCResponse<T>.self, from: responseData)
+        // Attempt to decode JSON-RPC response
+        let response: JSONRPCResponse<T>
+        do {
+            response = try JSONDecoder().decode(JSONRPCResponse<T>.self, from: responseData)
+        } catch {
+            self.logger.error("❌ JSON decode failed: \(error.localizedDescription)")
+            self.logger.error("   Response was: \(responseString.prefix(200))")
+            throw JSONRPCError.parseError
+        }
 
         if let error = response.error {
             throw JSONRPCError(code: error.code, message: error.message)
@@ -92,6 +138,15 @@ class LoRaCueService: ObservableObject {
         }
 
         return result
+    }
+
+    private func isRetryableError(_ error: JSONRPCError) -> Bool {
+        switch error {
+        case .parseError, .timeout, .transportError:
+            true
+        case .invalidRequest, .methodNotFound, .invalidParams, .internalError, .unknown:
+            false
+        }
     }
 
     private func sendRequestVoid(

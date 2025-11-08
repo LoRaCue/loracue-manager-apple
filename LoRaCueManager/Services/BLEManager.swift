@@ -150,7 +150,7 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
                 peripheral.writeValue(data, for: tx, type: .withResponse)
 
                 Task { @MainActor in
-                    try await Task.sleep(nanoseconds: 5_000_000_000) // 5s timeout
+                    try await Task.sleep(nanoseconds: 3_000_000_000) // 3s timeout
                     if self.responseContinuation != nil {
                         Logger.ble.error("⏱️ Command timed out: \(command)")
                         self.responseContinuation?.resume(throwing: BLEError.timeout)
@@ -238,11 +238,28 @@ extension BLEManager: CBCentralManagerDelegate {
         error: Error?
     ) {
         Task { @MainActor in
+            if let error {
+                Logger.ble.error("❌ Connection lost: \(error.localizedDescription)")
+            } else {
+                Logger.ble.info("✅ Disconnected gracefully")
+            }
+
+            // Cancel pending operations
+            self.responseContinuation?.resume(throwing: BLEError.notConnected)
+            self.responseContinuation = nil
+            self.responseAccumulationTask?.cancel()
+            self.responseAccumulationTask = nil
+            self.responseBuffer = ""
+
+            // Clean up state
             self.connectedPeripheral = nil
             self.connectionState = .disconnected
             self.txCharacteristic = nil
             self.rxCharacteristic = nil
             self._isReady = false
+
+            // Notify observers
+            self.onConnectionChanged?()
         }
     }
 }
@@ -319,6 +336,11 @@ extension BLEManager: CBPeripheralDelegate {
         didUpdateValueFor characteristic: CBCharacteristic,
         error: Error?
     ) {
+        if let error {
+            Logger.ble.error("⚠️ Characteristic update error: \(error.localizedDescription)")
+            return
+        }
+
         guard let data = characteristic.value,
               let string = String(data: data, encoding: .utf8)
         else {
@@ -329,6 +351,17 @@ extension BLEManager: CBPeripheralDelegate {
         Task { @MainActor in
             Logger.ble.info("📥 Received chunk: \(string.count) chars")
             self.responseBuffer += string
+
+            // Prevent buffer overflow from corrupted stream
+            if self.responseBuffer.count > 65536 {
+                Logger.ble.error("❌ Response buffer overflow - possible corrupted data")
+                self.responseContinuation?.resume(throwing: BLEError.invalidResponse)
+                self.responseContinuation = nil
+                self.responseBuffer = ""
+                self.responseAccumulationTask?.cancel()
+                self.responseAccumulationTask = nil
+                return
+            }
 
             // Cancel previous accumulation task
             self.responseAccumulationTask?.cancel()

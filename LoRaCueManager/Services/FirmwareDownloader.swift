@@ -35,10 +35,19 @@ class FirmwareDownloader {
         // Parse and validate manifest
         let manifest = try parseManifest(from: baseDir)
 
-        // Verify binaries
-        try verifyBinaries(manifest: manifest, baseDir: baseDir)
+        // Verify and load binaries
+        let (firmwareData, bootloaderData, partitionTableData) = try verifyBinaries(
+            manifest: manifest,
+            baseDir: baseDir
+        )
 
-        return FirmwarePackage(manifest: manifest, baseDirectory: baseDir)
+        return FirmwarePackage(
+            manifest: manifest,
+            firmwareData: firmwareData,
+            bootloaderData: bootloaderData,
+            partitionTableData: partitionTableData,
+            sourceUrl: zipUrl
+        )
     }
 
     private func resolveBaseDirectory(_ tempDir: URL) throws -> URL {
@@ -91,74 +100,74 @@ class FirmwareDownloader {
     }
 
     private func verifyManifestSignature(baseDir: URL, manifestData: Data) throws {
-        Logger.firmware.info("🔐 Loading manifest signature...")
+        Logger.firmware.info("🔐 Verifying manifest signature...")
+        let manifestUrl = baseDir.appendingPathComponent("manifest.json")
         let signatureUrl = baseDir.appendingPathComponent("manifest.json.sig")
+
         guard self.fileManager.fileExists(atPath: signatureUrl.path) else {
-            Logger.firmware.error("❌ manifest.json.sig not found at: \(signatureUrl.path)")
+            Logger.firmware.error("❌ manifest.json.sig not found")
             throw DownloadError.signatureVerificationFailed
         }
 
-        let signatureData = try Data(contentsOf: signatureUrl)
-        Logger.firmware.info("✅ Loaded signature (\(signatureData.count) bytes)")
-
-        Logger.firmware.info("🔐 Verifying manifest signature...")
-        let signatureResult = self.verifier.verifySignature(
-            data: manifestData,
-            signatureData: signatureData
-        )
-
-        guard signatureResult.isValid else {
+        let result = self.verifier.verifyJSONSignature(fileUrl: manifestUrl, signatureUrl: signatureUrl)
+        guard result.isValid else {
             Logger.firmware.error("❌ Manifest signature verification failed")
             throw DownloadError.signatureVerificationFailed
         }
         Logger.firmware.info("✅ Manifest signature verified")
     }
 
-    private func verifyBinaries(manifest: FirmwareManifest, baseDir: URL) throws {
-        // Load and verify binaries
-        _ = try self.loadAndVerify(
-            file: manifest.firmware.file,
-            expectedHash: manifest.firmware.sha256,
-            from: baseDir
-        )
+    private func verifyBinaries(manifest: FirmwareManifest, baseDir: URL) throws -> (Data, Data, Data) {
+        let binaries = [
+            (manifest.firmware.file, manifest.firmware.sha256),
+            (manifest.bootloader.file, manifest.bootloader.sha256),
+            (manifest.partitionTable.file, manifest.partitionTable.sha256)
+        ]
 
-        // Verify firmware signature
-        Logger.firmware.info("🔐 Verifying firmware signature...")
-        let firmwareSigPath = baseDir.appendingPathComponent(manifest.firmware.file + ".sig")
-        guard self.fileManager.fileExists(atPath: firmwareSigPath.path) else {
-            Logger.firmware.error("❌ Firmware signature file not found: \(firmwareSigPath.lastPathComponent)")
-            throw DownloadError.signatureVerificationFailed
+        var loadedData: [Data] = []
+
+        for (file, expectedHash) in binaries {
+            // Verify SHA256 and load data
+            let data = try loadAndVerify(file: file, expectedHash: expectedHash, from: baseDir)
+            loadedData.append(data)
+
+            // Verify signature
+            Logger.firmware.info("🔐 Verifying \(file) signature...")
+            let fileUrl = baseDir.appendingPathComponent(file)
+            let sigUrl = baseDir.appendingPathComponent(file + ".sig")
+
+            guard self.fileManager.fileExists(atPath: sigUrl.path) else {
+                Logger.firmware.error("❌ Signature not found: \(file).sig")
+                throw DownloadError.signatureVerificationFailed
+            }
+
+            let result = self.verifier.verifyBinarySignature(fileUrl: fileUrl, signatureUrl: sigUrl)
+            guard result.isValid else {
+                Logger.firmware.error("❌ Signature verification failed: \(file)")
+                throw DownloadError.signatureVerificationFailed
+            }
+            Logger.firmware.info("✅ \(file) signature verified")
         }
-        let firmwareSigData = try Data(contentsOf: firmwareSigPath)
-        let firmwareSigResult = self.verifier.verifySignature(
-            data: firmwareData,
-            signatureData: firmwareSigData
-        )
-        guard firmwareSigResult.isValid else {
-            Logger.firmware.error("❌ Firmware signature verification failed")
-            throw DownloadError.signatureVerificationFailed
+
+        // Verify webui if present
+        if let webui = manifest.webui {
+            _ = try self.loadAndVerify(file: webui.file, expectedHash: webui.sha256, from: baseDir)
+
+            Logger.firmware.info("🔐 Verifying \(webui.file) signature...")
+            let webuiUrl = baseDir.appendingPathComponent(webui.file)
+            let webuiSigUrl = baseDir.appendingPathComponent(webui.file + ".sig")
+
+            if self.fileManager.fileExists(atPath: webuiSigUrl.path) {
+                let result = self.verifier.verifyBinarySignature(fileUrl: webuiUrl, signatureUrl: webuiSigUrl)
+                guard result.isValid else {
+                    Logger.firmware.error("❌ WebUI signature verification failed")
+                    throw DownloadError.signatureVerificationFailed
+                }
+                Logger.firmware.info("✅ WebUI signature verified")
+            }
         }
-        Logger.firmware.info("✅ Firmware signature verified")
 
-        let bootloaderData = try loadAndVerify(
-            file: manifest.bootloader.file,
-            expectedHash: manifest.bootloader.sha256,
-            from: baseDir
-        )
-
-        let partitionTableData = try loadAndVerify(
-            file: manifest.partitionTable.file,
-            expectedHash: manifest.partitionTable.sha256,
-            from: baseDir
-        )
-
-        return FirmwarePackage(
-            manifest: manifest,
-            firmwareData: firmwareData,
-            bootloaderData: bootloaderData,
-            partitionTableData: partitionTableData,
-            sourceUrl: zipUrl
-        )
+        return (loadedData[0], loadedData[1], loadedData[2])
     }
 
     // MARK: - Validate Raw Binary

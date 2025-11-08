@@ -73,11 +73,7 @@ class USBManager: ObservableObject, DeviceTransport {
     }
 
     func disconnect() {
-        if self.fileDescriptor != -1 {
-            close(self.fileDescriptor)
-            self.fileDescriptor = -1
-        }
-        self._isConnected = false
+        self.handleDisconnection()
     }
 
     func sendCommand(_ command: String) async throws -> String {
@@ -91,16 +87,26 @@ class USBManager: ObservableObject, DeviceTransport {
         }
 
         guard written > 0 else {
-            throw USBError.writeFailed
+            // Write failure likely means device disconnected
+            self.handleDisconnection()
+            throw USBError.notConnected
         }
 
-        return try await self.readResponse()
+        do {
+            return try await self.readResponse()
+        } catch USBError.timeout {
+            // Timeout might indicate disconnection
+            throw USBError.timeout
+        } catch {
+            self.handleDisconnection()
+            throw error
+        }
     }
 
     private func readResponse() async throws -> String {
         var buffer = [UInt8](repeating: 0, count: 4096)
         var response = ""
-        let timeout = Date().addingTimeInterval(5.0)
+        let timeout = Date().addingTimeInterval(3.0)
 
         while Date() < timeout {
             let bytesRead = read(fileDescriptor, &buffer, buffer.count)
@@ -111,11 +117,23 @@ class USBManager: ObservableObject, DeviceTransport {
                         return response.trimmingCharacters(in: .whitespacesAndNewlines)
                     }
                 }
+            } else if bytesRead < 0 {
+                // Read error indicates disconnection
+                self.handleDisconnection()
+                throw USBError.notConnected
             }
             try await Task.sleep(nanoseconds: 10_000_000) // 10ms
         }
 
         throw USBError.timeout
+    }
+
+    private func handleDisconnection() {
+        if self.fileDescriptor != -1 {
+            close(self.fileDescriptor)
+            self.fileDescriptor = -1
+        }
+        self._isConnected = false
     }
 
     private func getDevicePath(_ service: io_object_t) -> String? {
@@ -152,7 +170,6 @@ class USBManager: ObservableObject, DeviceTransport {
 enum USBError: Error {
     case notConnected
     case connectionFailed
-    case writeFailed
     case timeout
 }
 #endif

@@ -33,37 +33,45 @@ class GitHubReleaseService {
 
     func fetchManifests(for release: GitHubRelease) async throws -> [FirmwareManifest] {
         Logger.firmware.info("🔍 Looking for manifests.json in \(release.assets.count) assets")
-        for asset in release.assets {
-            Logger.firmware.info("  - Asset: \(asset.name)")
-        }
 
         guard let manifestAsset = release.assets.first(where: { $0.name == "manifests.json" }) else {
             Logger.firmware.error("❌ manifests.json not found in release assets")
             throw GitHubError.manifestNotFound
         }
 
-        Logger.firmware.info("📥 Downloading manifests from: \(manifestAsset.browserDownloadUrl)")
-        let url = URL(string: manifestAsset.browserDownloadUrl)!
-        let (data, response) = try await URLSession.shared.data(from: url)
-
-        if let httpResponse = response as? HTTPURLResponse {
-            Logger.firmware.info("📡 HTTP Status: \(httpResponse.statusCode)")
+        guard let signatureAsset = release.assets.first(where: { $0.name == "manifests.json.sig" }) else {
+            Logger.firmware.error("❌ manifests.json.sig not found in release assets")
+            throw GitHubError.signatureNotFound
         }
-        Logger.firmware.info("📦 Downloaded \(data.count) bytes")
 
-        if let jsonString = String(data: data, encoding: .utf8) {
-            Logger.firmware.info("📄 JSON preview: \(jsonString.prefix(200))...")
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let manifestUrl = tempDir.appendingPathComponent("manifests.json")
+        let signatureUrl = tempDir.appendingPathComponent("manifests.json.sig")
+
+        Logger.firmware.info("📥 Downloading manifests.json...")
+        let (data, _) = try await URLSession.shared.data(from: URL(string: manifestAsset.browserDownloadUrl)!)
+        try data.write(to: manifestUrl)
+
+        Logger.firmware.info("📥 Downloading manifests.json.sig...")
+        let (sigData, _) = try await URLSession.shared.data(from: URL(string: signatureAsset.browserDownloadUrl)!)
+        try sigData.write(to: signatureUrl)
+
+        Logger.firmware.info("🔐 Verifying manifests.json signature...")
+        let verifier = FirmwareVerifier()
+        let result = verifier.verifyJSONSignature(fileUrl: manifestUrl, signatureUrl: signatureUrl)
+        guard result.isValid else {
+            Logger.firmware.error("❌ manifests.json signature verification failed")
+            throw GitHubError.signatureVerificationFailed
         }
+        Logger.firmware.info("✅ manifests.json signature verified")
 
         let decoder = JSONDecoder()
-        do {
-            let manifests = try decoder.decode([FirmwareManifest].self, from: data)
-            Logger.firmware.info("✅ Decoded \(manifests.count) manifests")
-            return manifests
-        } catch {
-            Logger.firmware.error("❌ JSON decode error: \(error)")
-            throw error
-        }
+        let manifests = try decoder.decode([FirmwareManifest].self, from: data)
+        Logger.firmware.info("✅ Decoded \(manifests.count) manifests")
+        return manifests
     }
 
     // MARK: - Filter Manifests
@@ -139,6 +147,8 @@ private class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
 enum GitHubError: LocalizedError {
     case requestFailed
     case manifestNotFound
+    case signatureNotFound
+    case signatureVerificationFailed
     case downloadFailed
     case noCompatibleFirmware
 
@@ -148,6 +158,10 @@ enum GitHubError: LocalizedError {
             "Failed to fetch releases from GitHub"
         case .manifestNotFound:
             "No manifests.json found in release"
+        case .signatureNotFound:
+            "No manifests.json.sig found in release"
+        case .signatureVerificationFailed:
+            "manifests.json signature verification failed"
         case .downloadFailed:
             "Failed to download firmware"
         case .noCompatibleFirmware:
