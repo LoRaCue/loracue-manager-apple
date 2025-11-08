@@ -4,9 +4,21 @@ import IOKit
 import IOKit.serial
 
 @MainActor
-class USBManager: ObservableObject {
+class USBManager: ObservableObject, DeviceTransport {
     @Published var discoveredDevices: [String] = []
-    @Published var isConnected = false
+    @Published private var _isConnected = false
+
+    nonisolated var isConnected: Bool {
+        MainActor.assumeIsolated {
+            self._isConnected
+        }
+    }
+
+    nonisolated var isReady: Bool {
+        MainActor.assumeIsolated {
+            self._isConnected
+        }
+    }
 
     private var fileDescriptor: Int32 = -1
     private let targetVID: UInt16 = 0x1209
@@ -57,15 +69,11 @@ class USBManager: ObservableObject {
         options.c_lflag = 0
 
         tcsetattr(self.fileDescriptor, TCSANOW, &options)
-        self.isConnected = true
+        self._isConnected = true
     }
 
     func disconnect() {
-        if self.fileDescriptor != -1 {
-            close(self.fileDescriptor)
-            self.fileDescriptor = -1
-        }
-        self.isConnected = false
+        self.handleDisconnection()
     }
 
     func sendCommand(_ command: String) async throws -> String {
@@ -79,16 +87,26 @@ class USBManager: ObservableObject {
         }
 
         guard written > 0 else {
-            throw USBError.writeFailed
+            // Write failure likely means device disconnected
+            self.handleDisconnection()
+            throw USBError.notConnected
         }
 
-        return try await self.readResponse()
+        do {
+            return try await self.readResponse()
+        } catch USBError.timeout {
+            // Timeout might indicate disconnection
+            throw USBError.timeout
+        } catch {
+            self.handleDisconnection()
+            throw error
+        }
     }
 
     private func readResponse() async throws -> String {
         var buffer = [UInt8](repeating: 0, count: 4096)
         var response = ""
-        let timeout = Date().addingTimeInterval(5.0)
+        let timeout = Date().addingTimeInterval(3.0)
 
         while Date() < timeout {
             let bytesRead = read(fileDescriptor, &buffer, buffer.count)
@@ -99,11 +117,23 @@ class USBManager: ObservableObject {
                         return response.trimmingCharacters(in: .whitespacesAndNewlines)
                     }
                 }
+            } else if bytesRead < 0 {
+                // Read error indicates disconnection
+                self.handleDisconnection()
+                throw USBError.notConnected
             }
             try await Task.sleep(nanoseconds: 10_000_000) // 10ms
         }
 
         throw USBError.timeout
+    }
+
+    private func handleDisconnection() {
+        if self.fileDescriptor != -1 {
+            close(self.fileDescriptor)
+            self.fileDescriptor = -1
+        }
+        self._isConnected = false
     }
 
     private func getDevicePath(_ service: io_object_t) -> String? {
@@ -140,7 +170,6 @@ class USBManager: ObservableObject {
 enum USBError: Error {
     case notConnected
     case connectionFailed
-    case writeFailed
     case timeout
 }
 #endif

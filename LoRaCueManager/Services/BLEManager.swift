@@ -2,6 +2,11 @@ import CoreBluetooth
 import Foundation
 import OSLog
 
+struct DeviceAdvertisementData {
+    let model: String?
+    let version: String?
+}
+
 /// Manages Bluetooth Low Energy connectivity for LoRaCue devices.
 ///
 /// `BLEManager` handles device discovery, connection management, and data communication
@@ -17,12 +22,27 @@ import OSLog
 /// ### Communication
 /// - ``sendCommand(_:)``
 @MainActor
-class BLEManager: NSObject, ObservableObject {
+class BLEManager: NSObject, ObservableObject, DeviceTransport {
     @Published var discoveredDevices: [CBPeripheral] = []
     @Published var isScanning = false
     @Published var connectedPeripheral: CBPeripheral?
     @Published var connectionState: CBPeripheralState = .disconnected
-    @Published var isReady = false
+    @Published var bluetoothState: CBManagerState = .unknown
+    @Published private var _isReady = false
+
+    private var advertisementData: [UUID: DeviceAdvertisementData] = [:]
+
+    nonisolated var isReady: Bool {
+        MainActor.assumeIsolated {
+            self._isReady
+        }
+    }
+
+    nonisolated var isConnected: Bool {
+        MainActor.assumeIsolated {
+            self.connectedPeripheral != nil
+        }
+    }
 
     var onConnectionChanged: (() -> Void)?
 
@@ -81,6 +101,10 @@ class BLEManager: NSObject, ObservableObject {
         self.centralManager.cancelPeripheralConnection(peripheral)
     }
 
+    func getAdvertisementData(for peripheral: CBPeripheral) -> DeviceAdvertisementData? {
+        self.advertisementData[peripheral.identifier]
+    }
+
     func sendCommand(_ command: String) async throws -> String {
         // Serialize commands through a queue
         try await withCheckedThrowingContinuation { queueContinuation in
@@ -111,13 +135,13 @@ class BLEManager: NSObject, ObservableObject {
         }
 
         // Wait for device to be ready (max 5 seconds)
-        if !self.isReady {
+        if !self._isReady {
             Logger.ble.info("⏳ Waiting for device to be ready...")
             for _ in 0 ..< 50 {
-                if self.isReady { break }
+                if self._isReady { break }
                 try await Task.sleep(nanoseconds: 100_000_000) // 100ms
             }
-            if !self.isReady {
+            if !self._isReady {
                 Logger.ble.error("❌ Device not ready after 5 seconds")
                 throw BLEError.notConnected
             }
@@ -137,7 +161,7 @@ class BLEManager: NSObject, ObservableObject {
                 peripheral.writeValue(data, for: tx, type: .withResponse)
 
                 Task { @MainActor in
-                    try await Task.sleep(nanoseconds: 5_000_000_000) // 5s timeout
+                    try await Task.sleep(nanoseconds: 3_000_000_000) // 3s timeout
                     if self.responseContinuation != nil {
                         Logger.ble.error("⏱️ Command timed out: \(command)")
                         self.responseContinuation?.resume(throwing: BLEError.timeout)
@@ -161,6 +185,7 @@ class BLEManager: NSObject, ObservableObject {
 extension BLEManager: CBCentralManagerDelegate {
     nonisolated func centralManagerDidUpdateState(_ central: CBCentralManager) {
         Task { @MainActor in
+            self.bluetoothState = central.state
             Logger.ble.info("📡 Bluetooth state changed to: \(central.state.rawValue)")
             switch central.state {
             case .poweredOn:
@@ -188,8 +213,35 @@ extension BLEManager: CBCentralManagerDelegate {
     ) {
         Task { @MainActor in
             Logger.ble.info("📱 Discovered device: \(peripheral.name ?? "Unknown") (\(peripheral.identifier))")
+
+            // Parse service data
+            var advData: DeviceAdvertisementData?
+            if let serviceDataDict = advertisementData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data] {
+                let nusUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
+                if let data = serviceDataDict[nusUUID], data.count >= 6 {
+                    let major = data[0]
+                    let minor = data[1]
+                    let patch = data[2]
+                    let buildFlags = UInt16(data[3]) | (UInt16(data[4]) << 8)
+                    let buildNumber = (buildFlags >> 2) & 0x3FFF
+                    let releaseType = buildFlags & 0b11
+                    let modelName = String(cString: Array(data[5...]))
+
+                    let typeString = ["", "beta", "alpha", "dev"][Int(releaseType)]
+                    let versionString = buildNumber > 0 && !typeString.isEmpty
+                        ? "v\(major).\(minor).\(patch)-\(typeString).\(buildNumber)"
+                        : "v\(major).\(minor).\(patch)"
+
+                    advData = DeviceAdvertisementData(model: modelName, version: versionString)
+                    Logger.ble.info("📦 Parsed: \(modelName) \(versionString)")
+                }
+            }
+
             if !self.discoveredDevices.contains(where: { $0.identifier == peripheral.identifier }) {
                 self.discoveredDevices.append(peripheral)
+                if let advData {
+                    self.advertisementData[peripheral.identifier] = advData
+                }
                 Logger.ble.info("✅ Added to list, total devices: \(self.discoveredDevices.count)")
             }
         }
@@ -224,11 +276,28 @@ extension BLEManager: CBCentralManagerDelegate {
         error: Error?
     ) {
         Task { @MainActor in
+            if let error {
+                Logger.ble.error("❌ Connection lost: \(error.localizedDescription)")
+            } else {
+                Logger.ble.info("✅ Disconnected gracefully")
+            }
+
+            // Cancel pending operations
+            self.responseContinuation?.resume(throwing: BLEError.notConnected)
+            self.responseContinuation = nil
+            self.responseAccumulationTask?.cancel()
+            self.responseAccumulationTask = nil
+            self.responseBuffer = ""
+
+            // Clean up state
             self.connectedPeripheral = nil
             self.connectionState = .disconnected
             self.txCharacteristic = nil
             self.rxCharacteristic = nil
-            self.isReady = false
+            self._isReady = false
+
+            // Notify observers
+            self.onConnectionChanged?()
         }
     }
 }
@@ -294,7 +363,7 @@ extension BLEManager: CBPeripheralDelegate {
                 }
             }
             if self.txCharacteristic != nil, self.rxCharacteristic != nil {
-                self.isReady = true
+                self._isReady = true
                 Logger.ble.info("🎉 Device fully ready for communication")
             }
         }
@@ -305,6 +374,11 @@ extension BLEManager: CBPeripheralDelegate {
         didUpdateValueFor characteristic: CBCharacteristic,
         error: Error?
     ) {
+        if let error {
+            Logger.ble.error("⚠️ Characteristic update error: \(error.localizedDescription)")
+            return
+        }
+
         guard let data = characteristic.value,
               let string = String(data: data, encoding: .utf8)
         else {
@@ -315,6 +389,17 @@ extension BLEManager: CBPeripheralDelegate {
         Task { @MainActor in
             Logger.ble.info("📥 Received chunk: \(string.count) chars")
             self.responseBuffer += string
+
+            // Prevent buffer overflow from corrupted stream
+            if self.responseBuffer.count > 65536 {
+                Logger.ble.error("❌ Response buffer overflow - possible corrupted data")
+                self.responseContinuation?.resume(throwing: BLEError.invalidResponse)
+                self.responseContinuation = nil
+                self.responseBuffer = ""
+                self.responseAccumulationTask?.cancel()
+                self.responseAccumulationTask = nil
+                return
+            }
 
             // Cancel previous accumulation task
             self.responseAccumulationTask?.cancel()

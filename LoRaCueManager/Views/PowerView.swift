@@ -1,11 +1,7 @@
 import SwiftUI
 
 struct PowerView: View {
-    @StateObject private var viewModel: PowerViewModel
-
-    init(service: LoRaCueService) {
-        _viewModel = StateObject(wrappedValue: PowerViewModel(service: service))
-    }
+    @ObservedObject var viewModel: PowerViewModel
 
     var body: some View {
         Form {
@@ -54,19 +50,33 @@ struct PowerView: View {
                         ), in: 1000 ... 600_000, step: 1000)
                     }
                 }
-
-                Section {
-                    Button("Save") {
-                        Task { await self.viewModel.save() }
-                    }
-                    .disabled(self.viewModel.isLoading)
-                }
             } else {
                 ProgressView()
             }
         }
+        #if os(iOS)
+        .formStyle(.grouped)
+        #endif
+        #if os(macOS)
+        .padding(.horizontal, 32)
+        .padding(.top, 0)
+        .padding(.bottom, 32)
+        #endif
         .navigationTitle("Power Management")
-        .task { await self.viewModel.load() }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Save") {
+                    Task { await self.viewModel.save() }
+                }
+                .disabled(self.viewModel.isLoading)
+            }
+        }
+        .task {
+            while !self.viewModel.service.isReady {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+            await self.viewModel.load()
+        }
         .alert("Error", isPresented: .constant(self.viewModel.error != nil)) {
             Button("OK") { self.viewModel.error = nil }
         } message: {

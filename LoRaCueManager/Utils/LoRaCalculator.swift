@@ -15,13 +15,22 @@ enum LoRaCalculator {
 
         let timeOnAir = Int(preambleTime + payloadTime)
 
-        // Range calculation (Friis transmission equation approximation)
-        let frequency = 868.0 // MHz (default EU868)
-        let pathLossExponent = 2.0
-        let receiverSensitivity = -137.0 + Double(sf - 7) * 2.5
+        // Range calculation (indoor path loss model matching WebUI)
+        // SX1262 sensitivity: -148 dBm @ SF12/BW125, improves ~2.5dB per SF step down
+        let sensitivity = -148.0 + Double(12 - sf) * 2.5 + (bw > 125_000 ? log2(Double(bw) / 125_000.0) * 3.0 : 0.0)
+        let linkBudget = Double(txPower) - sensitivity
 
-        let pathLoss = Double(txPower) - receiverSensitivity
-        let range = Int(pow(10.0, (pathLoss - 20.0 * log10(frequency) - 32.44) / (10.0 * pathLossExponent)))
+        // Indoor path loss model with heavy attenuation
+        let fadeMargin = 20.0 // dB - conservative for reliability
+        let pathLossExponent = 3.5 // Heavy indoor attenuation (concrete walls, multiple floors)
+        let referenceDistance = 1.0 // meters
+        let referenceLoss = 50.0 // dB at 1m (realistic for indoor 868 MHz)
+
+        // Solve for distance: d = d0 * 10^((linkBudget - fadeMargin - PL0) / (10*n))
+        let range = Int(referenceDistance * pow(
+            10.0,
+            (linkBudget - fadeMargin - referenceLoss) / (10.0 * pathLossExponent)
+        ))
 
         return (latency: timeOnAir, range: range)
     }

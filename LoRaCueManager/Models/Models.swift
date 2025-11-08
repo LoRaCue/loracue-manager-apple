@@ -6,6 +6,7 @@ import Foundation
 ///
 /// Contains hardware details, firmware version, and runtime statistics.
 struct DeviceInfo: Codable {
+    let model: String
     let boardId: String
     let version: String
     let commit: String
@@ -21,6 +22,7 @@ struct DeviceInfo: Codable {
     let partition: String
 
     enum CodingKeys: String, CodingKey {
+        case model
         case boardId = "board_id"
         case version
         case commit
@@ -39,7 +41,7 @@ struct DeviceInfo: Codable {
 
 // MARK: - General Config
 
-struct GeneralConfig: Codable {
+struct GeneralConfig: Codable, Equatable {
     var name: String
     var mode: String
     var brightness: Int
@@ -57,7 +59,7 @@ struct GeneralConfig: Codable {
 
 // MARK: - Power Config
 
-struct PowerConfig: Codable {
+struct PowerConfig: Codable, Equatable {
     var displaySleepEnabled: Bool
     var displaySleepTimeoutMs: Int
     var lightSleepEnabled: Bool
@@ -77,7 +79,7 @@ struct PowerConfig: Codable {
 
 // MARK: - LoRa Config
 
-struct LoRaConfig: Codable {
+struct LoRaConfig: Codable, Equatable {
     var bandId: String
     var frequency: Int
     var spreadingFactor: Int
@@ -144,4 +146,56 @@ struct LoRaBand: Codable, Identifiable, Hashable {
 
 struct UnpairRequest: Codable {
     let mac: String
+}
+
+// MARK: - JSON-RPC Error
+
+/// JSON-RPC 2.0 error codes and user-friendly messages
+enum JSONRPCError: Error, LocalizedError {
+    case parseError
+    case invalidRequest
+    case methodNotFound
+    case invalidParams(String)
+    case internalError(String)
+    case transportError(String)
+    case timeout
+    case unknown(Int, String)
+
+    init(code: Int, message: String) {
+        switch code {
+        case -32700:
+            self = .parseError
+        case -32600:
+            self = .invalidRequest
+        case -32601:
+            self = .methodNotFound
+        case -32602:
+            self = .invalidParams(message)
+        case -32603:
+            self = .internalError(message)
+        default:
+            self = .unknown(code, message)
+        }
+    }
+
+    var errorDescription: String? {
+        switch self {
+        case .parseError:
+            "Invalid JSON received from device"
+        case .invalidRequest:
+            "Invalid request format"
+        case .methodNotFound:
+            "Command not supported by device"
+        case let .invalidParams(detail):
+            "Invalid parameters: \(detail)"
+        case let .internalError(detail):
+            "Device error: \(detail)"
+        case let .transportError(detail):
+            "Communication error: \(detail)"
+        case .timeout:
+            "Request timed out"
+        case let .unknown(code, message):
+            "Error \(code): \(message)"
+        }
+    }
 }

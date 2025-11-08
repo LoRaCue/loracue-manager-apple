@@ -1,8 +1,8 @@
+import OSLog
 import SwiftUI
 
 struct PairedDevicesView: View {
     @StateObject private var viewModel: PairedDevicesViewModel
-    @State private var showAddEdit = false
     @State private var editingDevice: PairedDevice?
 
     init(service: LoRaCueService) {
@@ -11,28 +11,56 @@ struct PairedDevicesView: View {
 
     var body: some View {
         List {
-            ForEach(self.viewModel.devices) { device in
-                VStack(alignment: .leading) {
-                    Text(device.name)
-                        .font(.headline)
-                    Text(device.mac)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .swipeActions {
-                    Button(role: .destructive) {
-                        Task { await self.viewModel.delete(mac: device.mac) }
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
+            if self.viewModel.devices.isEmpty {
+                ContentUnavailableView(
+                    "No Paired Devices",
+                    systemImage: "link.badge.plus",
+                    description: Text("Add devices to pair with this LoRaCue")
+                )
+            } else {
+                ForEach(self.viewModel.devices) { device in
+                    HStack(spacing: 12) {
+                        Image(systemName: "antenna.radiowaves.left.and.right")
+                            .font(.title2)
+                            .foregroundStyle(.blue)
+                            .frame(width: 40)
 
-                    Button {
-                        self.editingDevice = device
-                        self.showAddEdit = true
-                    } label: {
-                        Label("Edit", systemImage: "pencil")
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(device.name)
+                                .font(.headline)
+
+                            Text(device.mac)
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(.secondary)
+
+                            HStack(spacing: 4) {
+                                Image(systemName: "key.fill")
+                                    .font(.caption2)
+                                Text("AES-256")
+                                    .font(.caption2)
+                            }
+                            .foregroundStyle(.green)
+                        }
+
+                        Spacer()
+
+                        Button {
+                            self.editingDevice = device
+                        } label: {
+                            Image(systemName: "pencil.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(.blue)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .tint(.blue)
+                    .padding(.vertical, 4)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            Task { await self.viewModel.delete(mac: device.mac) }
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
                 }
             }
         }
@@ -40,17 +68,28 @@ struct PairedDevicesView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    self.editingDevice = nil
-                    self.showAddEdit = true
+                    self.editingDevice = PairedDevice(name: "", mac: "", aesKey: "")
                 } label: {
                     Label("Add", systemImage: "plus")
                 }
             }
         }
-        .task { await self.viewModel.load() }
-        .sheet(isPresented: self.$showAddEdit) {
-            PairedDeviceModal(device: self.editingDevice, viewModel: self.viewModel)
+        .task {
+            while !self.viewModel.service.isReady {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+            await self.viewModel.load()
         }
+        .sheet(
+            item: self.$editingDevice,
+            onDismiss: {
+                self.editingDevice = nil
+            },
+            content: { device in
+                PairedDeviceModal(device: device.mac.isEmpty ? nil : device, viewModel: self.viewModel)
+                    .presentationDetents([.medium, .large])
+            }
+        )
         .alert("Error", isPresented: .constant(self.viewModel.error != nil)) {
             Button("OK") { self.viewModel.error = nil }
         } message: {
@@ -66,74 +105,144 @@ struct PairedDeviceModal: View {
     @State private var name = ""
     @State private var mac = ""
     @State private var aesKey = ""
+    @State private var showKey = false
+    @State private var originalName = ""
+    @State private var originalMac = ""
+    @State private var originalKey = ""
     @Environment(\.dismiss) var dismiss
+
+    private var isDirty: Bool {
+        let isValid = !self.name.isEmpty && self.mac.count == 17 && self.aesKey.count == 64
+        let hasChanges = self.name != self.originalName || self.mac != self.originalMac || self.aesKey != self
+            .originalKey
+        return isValid && hasChanges
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    TextField("Name", text: self.$name)
+                Section("Device Information") {
+                    TextField("Device Name", text: self.$name)
+                        .textFieldStyle(.roundedBorder)
 
-                    TextField("MAC Address", text: self.$mac)
-                    #if os(iOS)
-                        .textInputAutocapitalization(.characters)
-                    #endif
-                        .autocorrectionDisabled()
-                        .disabled(self.device != nil)
-                        .onChange(of: self.mac) { _, newValue in
-                            self.mac = LoRaCalculator.formatMACAddress(newValue)
-                        }
-
-                    TextField("AES Key (64 hex chars)", text: self.$aesKey)
-                    #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                    #endif
-                        .autocorrectionDisabled()
-                }
-
-                Section {
-                    Button("Generate Random Key") {
-                        self.aesKey = LoRaCalculator.generateRandomAESKey()
-                    }
-
-                    Button("Copy to Clipboard") {
+                    if self.device == nil {
+                        TextField("MAC Address", text: self.$mac)
+                            .textFieldStyle(.roundedBorder)
                         #if os(iOS)
-                        UIPasteboard.general.string = self.aesKey
-                        #else
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(self.aesKey, forType: .string)
+                            .textInputAutocapitalization(.characters)
                         #endif
-                    }
-                    .disabled(self.aesKey.count != 64)
-                }
-            }
-            .navigationTitle(self.device == nil ? "Add Device" : "Edit Device")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { self.dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        Task {
-                            let pairedDevice = PairedDevice(name: name, mac: mac, aesKey: aesKey)
-                            if self.device == nil {
-                                await self.viewModel.add(pairedDevice)
-                            } else {
-                                await self.viewModel.update(pairedDevice)
+                            .autocorrectionDisabled()
+                            .onChange(of: self.mac) { _, newValue in
+                                let formatted = LoRaCalculator.formatMACAddress(newValue)
+                                self.mac = String(formatted.prefix(17))
                             }
-                            self.dismiss()
+                    } else {
+                        LabeledContent("MAC Address") {
+                            Text(self.mac)
+                                .foregroundStyle(.secondary)
+                                .font(.system(.body, design: .monospaced))
                         }
                     }
-                    .disabled(self.name.isEmpty || self.mac.count != 17 || self.aesKey.count != 64)
+                }
+
+                Section("AES-256 Encryption Key") {
+                    HStack {
+                        if self.showKey {
+                            TextField("64 hex characters", text: self.$aesKey, axis: .horizontal)
+                            #if os(iOS)
+                                .textInputAutocapitalization(.never)
+                            #endif
+                                .autocorrectionDisabled()
+                                .font(.system(.body, design: .monospaced))
+                                .lineLimit(1)
+                        } else {
+                            Text(String(repeating: "•", count: 64))
+                                .font(.system(.body, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            Spacer()
+                        }
+
+                        Button {
+                            self.showKey.toggle()
+                        } label: {
+                            Image(systemName: self.showKey ? "eye.slash" : "eye")
+                        }
+                    }
+
+                    HStack {
+                        Button {
+                            self.aesKey = LoRaCalculator.generateRandomAESKey()
+                            self.showKey = true
+                        } label: {
+                            Label("Generate Random", systemImage: "dice")
+                        }
+
+                        Spacer()
+
+                        Button {
+                            #if os(iOS)
+                            UIPasteboard.general.string = self.aesKey
+                            #else
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(self.aesKey, forType: .string)
+                            #endif
+                        } label: {
+                            Label("Copy", systemImage: "doc.on.doc")
+                        }
+                        .disabled(self.aesKey.count != 64)
+                    }
+                    .buttonStyle(.borderless)
+                }
+
+                if !self.aesKey.isEmpty, self.aesKey.count != 64 {
+                    Section {
+                        Label("Key must be exactly 64 hex characters", systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
+            #if os(macOS)
+            .padding(20)
+            #endif
+            .navigationTitle(self.device == nil ? "Add Device" : "Device Details")
+            #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { self.dismiss() }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            Task {
+                                let pairedDevice = PairedDevice(name: name, mac: mac, aesKey: aesKey)
+                                if self.device == nil {
+                                    await self.viewModel.add(pairedDevice)
+                                } else {
+                                    await self.viewModel.update(pairedDevice)
+                                }
+                                self.dismiss()
+                            }
+                        }
+                        .foregroundStyle(.blue)
+                        .fontWeight(self.isDirty ? .semibold : .regular)
+                        .opacity(self.isDirty ? 1.0 : 0.4)
+                        .disabled(!self.isDirty)
+                    }
+                }
         }
         .onAppear {
+            Logger.ui.info("📝 PairedDeviceModal appeared - device: \(self.device?.name ?? "nil")")
             if let device {
                 self.name = device.name
                 self.mac = device.mac
-                self.aesKey = ""
+                self.aesKey = device.aesKey
+                Logger.ui.info("📝 Loaded device data: name=\(device.name), mac=\(device.mac)")
             }
+            self.originalName = self.name
+            self.originalMac = self.mac
+            self.originalKey = self.aesKey
         }
     }
 }

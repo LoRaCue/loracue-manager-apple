@@ -1,11 +1,10 @@
 import SwiftUI
 
 struct GeneralView: View {
-    @StateObject private var viewModel: GeneralViewModel
-
-    init(service: LoRaCueService) {
-        _viewModel = StateObject(wrappedValue: GeneralViewModel(service: service))
-    }
+    @ObservedObject var viewModel: GeneralViewModel
+    @State private var showResetConfirmation = false
+    @State private var showFinalConfirmation = false
+    @State private var showBluetoothWarning = false
 
     var body: some View {
         ScrollView {
@@ -59,7 +58,7 @@ struct GeneralView: View {
                     HStack(alignment: .top, spacing: 24) {
                         // Slot ID
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Slot ID (Multi-PC Routing)")
+                            Text("Slot ID\n(Multi-PC Routing)")
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                             Picker("", selection: Binding(
@@ -80,13 +79,19 @@ struct GeneralView: View {
                         // Bluetooth
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Text("Bluetooth Configuration")
+                                Text("Bluetooth")
                                     .font(.subheadline)
                                     .fontWeight(.medium)
                                 Spacer()
                                 Toggle("", isOn: Binding(
                                     get: { config.bluetooth },
-                                    set: { self.viewModel.config?.bluetooth = $0 }
+                                    set: { newValue in
+                                        if !newValue, self.viewModel.service.bleManager.connectedPeripheral != nil {
+                                            self.showBluetoothWarning = true
+                                        } else {
+                                            self.viewModel.config?.bluetooth = newValue
+                                        }
+                                    }
                                 ))
                                 .labelsHidden()
                             }
@@ -97,28 +102,24 @@ struct GeneralView: View {
                         .frame(maxWidth: .infinity)
                     }
 
-                    // Save Button
+                    // Factory Reset
                     Divider()
-                        .padding(.top, 8)
+                        .padding(.top, 32)
+                        .padding(.bottom, 32)
 
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            Task { await self.viewModel.save() }
-                        }) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "square.and.arrow.down")
-                                Text("Save")
-                            }
+                    Button(role: .destructive) {
+                        self.showResetConfirmation = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle")
+                            Text("Factory Reset")
                         }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(self.viewModel.isLoading)
-
-                        if self.viewModel.isLoading {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                        }
+                        .font(.system(size: 24))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 62)
                     }
+                    .buttonStyle(.bordered)
+
                 } else if self.viewModel.error != nil {
                     ContentUnavailableView(
                         "Failed to Load",
@@ -137,7 +138,50 @@ struct GeneralView: View {
             .padding(32)
         }
         .navigationTitle("General Settings")
-        .task { await self.viewModel.load() }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Save") {
+                    Task { await self.viewModel.save() }
+                }
+                .disabled(self.viewModel.isLoading)
+            }
+        }
+        .task {
+            // Wait for BLE device to be ready
+            while !self.viewModel.service.isReady {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            }
+            await self.viewModel.load()
+        }
+        .confirmationDialog("Factory Reset", isPresented: self.$showResetConfirmation, titleVisibility: .visible) {
+            Button("Reset to Factory Defaults", role: .destructive) {
+                self.showFinalConfirmation = true
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will erase all device settings and reboot. This action cannot be undone.")
+        }
+        .confirmationDialog("Final Confirmation", isPresented: self.$showFinalConfirmation, titleVisibility: .visible) {
+            Button("Reset Now", role: .destructive) {
+                Task { await self.viewModel.factoryReset() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This action cannot be undone. All settings will be permanently erased.")
+        }
+        .alert("Disable Bluetooth?", isPresented: self.$showBluetoothWarning) {
+            Button("Cancel", role: .cancel) {}
+            Button("Disable", role: .destructive) {
+                self.viewModel.config?.bluetooth = false
+            }
+        } message: {
+            Text(
+                """
+                Disabling Bluetooth will disconnect the device. You can only re-enable Bluetooth \
+                from the device settings menu.
+                """
+            )
+        }
     }
 }
 

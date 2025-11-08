@@ -7,16 +7,19 @@ struct ContentView: View {
     var body: some View {
         Logger.ui.info(
             """
-            ContentView body: service=\(self.service.instanceId) \
-            bleManager=\(self.service.bleManager?.instanceId ?? "nil")
+            ContentView body: bleManager=\(self.service.bleManager.instanceId)
             """
         )
 
+        #if os(macOS)
         return NavigationSplitView {
             DeviceListView(service: self.service)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 400)
         } detail: {
             DeviceDetailView(service: self.service)
         }
+        #else
+        return DeviceListView(service: self.service)
+        #endif
     }
 }
