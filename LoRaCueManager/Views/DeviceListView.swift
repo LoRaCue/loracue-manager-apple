@@ -188,10 +188,17 @@ struct DeviceListView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     HStack(spacing: 8) {
+                        #if os(iOS)
                         Image(uiImage: UIImage(named: "AppIcon") ?? UIImage())
                             .resizable()
                             .frame(width: 28, height: 28)
                             .cornerRadius(6)
+                        #else
+                        Image(nsImage: NSImage(named: "AppIcon") ?? NSImage())
+                            .resizable()
+                            .frame(width: 28, height: 28)
+                            .cornerRadius(6)
+                        #endif
                         Text("LoRaCue Manager")
                             .font(.headline)
                     }
