@@ -79,26 +79,43 @@ struct DeviceListView: View {
                                 self.selectedDevice = peripheral.identifier.uuidString
                             } label: {
                                 HStack(spacing: 12) {
-                                    Circle()
-                                        .fill(self.bleManager.connectedPeripheral?.identifier == peripheral
-                                            .identifier ? Color.green : Color.gray.opacity(0.3))
-                                        .frame(width: 10, height: 10)
+                                    Image(systemName: "antenna.radiowaves.left.and.right")
+                                        .font(.title2)
+                                        .foregroundStyle(self.bleManager.connectedPeripheral?.identifier == peripheral
+                                            .identifier ? .green : .blue)
+                                        .frame(width: 32)
 
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text(self.deviceDisplayName(peripheral.name ?? "Unknown"))
-                                            .font(.body)
-                                            .fontWeight(.medium)
-                                        HStack(spacing: 4) {
-                                            Text("BLE")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                            if self.bleManager.connectedPeripheral?.identifier == peripheral
-                                                .identifier
-                                            {
-                                                Text("• Connected")
-                                                    .font(.caption)
-                                                    .foregroundColor(.green)
+                                        if let advData = self.bleManager.getAdvertisementData(for: peripheral),
+                                           let model = advData.model
+                                        {
+                                            Text(model)
+                                                .font(.headline)
+                                        } else {
+                                            Text(self.deviceDisplayName(peripheral.name ?? "Unknown"))
+                                                .font(.headline)
+                                        }
+
+                                        if let advData = self.bleManager.getAdvertisementData(for: peripheral),
+                                           let version = advData.version
+                                        {
+                                            Text(version)
+                                                .font(.system(.caption, design: .monospaced))
+                                                .foregroundStyle(.secondary)
+                                        } else {
+                                            Text(peripheral.identifier.uuidString)
+                                                .font(.system(.caption, design: .monospaced))
+                                                .foregroundStyle(.secondary)
+                                        }
+
+                                        if self.bleManager.connectedPeripheral?.identifier == peripheral.identifier {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "checkmark.circle.fill")
+                                                    .font(.caption2)
+                                                Text("Connected")
+                                                    .font(.caption2)
                                             }
+                                            .foregroundStyle(.green)
                                         }
                                     }
 
@@ -222,6 +239,7 @@ struct DeviceListView: View {
                         DeviceRow(
                             name: path.components(separatedBy: "/").last ?? "Unknown",
                             type: "USB",
+                            detail: path,
                             isConnected: self.usbManager.isConnected
                         ) {
                             if self.usbManager.isConnected {
@@ -341,15 +359,18 @@ struct DeviceListView: View {
 
     private func deviceDisplayName(_ name: String) -> String {
         name.replacingOccurrences(of: "LoRaCue-", with: "")
-            .replacingOccurrences(of: "LoRaCue", with: "")
+            .replacingOccurrences(of: "LoRaCue ", with: "")
     }
 
     @ViewBuilder
     private func deviceRowView(for peripheral: CBPeripheral) -> some View {
         let isConnected = self.bleManager.connectedPeripheral?.identifier == peripheral.identifier
+        let advData = self.bleManager.getAdvertisementData(for: peripheral)
+
         DeviceRow(
-            name: self.deviceDisplayName(peripheral.name ?? "Unknown"),
+            name: advData?.model ?? self.deviceDisplayName(peripheral.name ?? "Unknown"),
             type: "BLE",
+            detail: advData?.version ?? peripheral.identifier.uuidString,
             isConnected: isConnected
         ) {
             self.handleDeviceTap(peripheral: peripheral, isConnected: isConnected)
@@ -385,27 +406,42 @@ struct DeviceListView: View {
 struct DeviceRow: View {
     let name: String
     let type: String
+    let detail: String
     let isConnected: Bool
     let onTap: () -> Void
 
-    var body: some View {
-        HStack {
-            Circle()
-                .fill(self.isConnected ? Color.green : Color.gray.opacity(0.3))
-                .frame(width: 8, height: 8)
+    private var icon: String {
+        switch self.type {
+        case "BLE": "antenna.radiowaves.left.and.right"
+        case "USB": "cable.connector"
+        case "Mock": "cpu"
+        default: "questionmark"
+        }
+    }
 
-            VStack(alignment: .leading, spacing: 2) {
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: self.icon)
+                .font(.title2)
+                .foregroundStyle(self.isConnected ? .green : .blue)
+                .frame(width: 32)
+
+            VStack(alignment: .leading, spacing: 4) {
                 Text(self.name)
                     .font(.headline)
-                HStack(spacing: 4) {
-                    Text(self.type)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    if self.isConnected {
-                        Text("• Connected")
-                            .font(.caption)
-                            .foregroundColor(.green)
+
+                Text(self.detail)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+
+                if self.isConnected {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption2)
+                        Text("Connected")
+                            .font(.caption2)
                     }
+                    .foregroundStyle(.green)
                 }
             }
 

@@ -2,6 +2,11 @@ import CoreBluetooth
 import Foundation
 import OSLog
 
+struct DeviceAdvertisementData {
+    let model: String?
+    let version: String?
+}
+
 /// Manages Bluetooth Low Energy connectivity for LoRaCue devices.
 ///
 /// `BLEManager` handles device discovery, connection management, and data communication
@@ -24,6 +29,8 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
     @Published var connectionState: CBPeripheralState = .disconnected
     @Published var bluetoothState: CBManagerState = .unknown
     @Published private var _isReady = false
+
+    private var advertisementData: [UUID: DeviceAdvertisementData] = [:]
 
     nonisolated var isReady: Bool {
         MainActor.assumeIsolated {
@@ -92,6 +99,10 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
     func disconnect() {
         guard let peripheral = connectedPeripheral else { return }
         self.centralManager.cancelPeripheralConnection(peripheral)
+    }
+
+    func getAdvertisementData(for peripheral: CBPeripheral) -> DeviceAdvertisementData? {
+        self.advertisementData[peripheral.identifier]
     }
 
     func sendCommand(_ command: String) async throws -> String {
@@ -202,8 +213,35 @@ extension BLEManager: CBCentralManagerDelegate {
     ) {
         Task { @MainActor in
             Logger.ble.info("📱 Discovered device: \(peripheral.name ?? "Unknown") (\(peripheral.identifier))")
+
+            // Parse service data
+            var advData: DeviceAdvertisementData?
+            if let serviceDataDict = advertisementData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data] {
+                let nusUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
+                if let data = serviceDataDict[nusUUID], data.count >= 6 {
+                    let major = data[0]
+                    let minor = data[1]
+                    let patch = data[2]
+                    let buildFlags = UInt16(data[3]) | (UInt16(data[4]) << 8)
+                    let buildNumber = (buildFlags >> 2) & 0x3FFF
+                    let releaseType = buildFlags & 0b11
+                    let modelName = String(cString: Array(data[5...]))
+
+                    let typeString = ["", "beta", "alpha", "dev"][Int(releaseType)]
+                    let versionString = buildNumber > 0 && !typeString.isEmpty
+                        ? "v\(major).\(minor).\(patch)-\(typeString).\(buildNumber)"
+                        : "v\(major).\(minor).\(patch)"
+
+                    advData = DeviceAdvertisementData(model: modelName, version: versionString)
+                    Logger.ble.info("📦 Parsed: \(modelName) \(versionString)")
+                }
+            }
+
             if !self.discoveredDevices.contains(where: { $0.identifier == peripheral.identifier }) {
                 self.discoveredDevices.append(peripheral)
+                if let advData {
+                    self.advertisementData[peripheral.identifier] = advData
+                }
                 Logger.ble.info("✅ Added to list, total devices: \(self.discoveredDevices.count)")
             }
         }

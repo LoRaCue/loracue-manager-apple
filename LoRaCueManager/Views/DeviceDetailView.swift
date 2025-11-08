@@ -27,7 +27,7 @@ private struct DetailContent: View {
     @State private var selectedTabIndex = 0
     @State private var showSystemInfo = false
     @State private var showAddDevice = false
-    @State private var deviceName = "Device"
+    @State private var deviceName = ""
 
     @StateObject private var generalVM: GeneralViewModel
     @StateObject private var powerVM: PowerViewModel
