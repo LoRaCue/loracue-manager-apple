@@ -64,7 +64,10 @@ struct FirmwareUpgradeView: View {
             }
         } message: {
             Text(
-                "Installing raw .bin files bypasses all security checks and could brick your device. Only proceed if you know what you're doing."
+                """
+                Installing raw .bin files bypasses all security checks and could brick your device. \
+                Only proceed if you know what you're doing.
+                """
             )
         }
         .alert("Confirm Upgrade", isPresented: self.$showUpgradeConfirmation) {
@@ -217,7 +220,10 @@ struct FirmwareUpgradeView: View {
                 }
 
                 Text(
-                    "Raw .bin files bypass all security checks. This could brick your device if the firmware is incompatible or corrupted."
+                    """
+                    Raw .bin files bypass all security checks. This could brick your device if the \
+                    firmware is incompatible or corrupted.
+                    """
                 )
                 .font(.caption)
                 .foregroundColor(.secondary)

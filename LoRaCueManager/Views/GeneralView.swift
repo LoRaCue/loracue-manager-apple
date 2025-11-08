@@ -176,7 +176,10 @@ struct GeneralView: View {
             }
         } message: {
             Text(
-                "Disabling Bluetooth will disconnect the device. You can only re-enable Bluetooth from the device settings menu."
+                """
+                Disabling Bluetooth will disconnect the device. You can only re-enable Bluetooth \
+                from the device settings menu.
+                """
             )
         }
     }
