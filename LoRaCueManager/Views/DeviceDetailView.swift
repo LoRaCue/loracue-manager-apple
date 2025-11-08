@@ -192,14 +192,18 @@ private struct DetailContent: View {
             }
             .presentationDetents([.medium, .large])
         }
-        .sheet(isPresented: self.$showAddDevice, onDismiss: {
-            Task {
-                await self.pairedVM.load()
+        .sheet(
+            isPresented: self.$showAddDevice,
+            onDismiss: {
+                Task {
+                    await self.pairedVM.load()
+                }
+            },
+            content: {
+                PairedDeviceModal(device: nil, viewModel: self.pairedVM)
+                    .presentationDetents([.medium, .large])
             }
-        }) {
-            PairedDeviceModal(device: nil, viewModel: self.pairedVM)
-                .presentationDetents([.medium, .large])
-        }
+        )
         .onChange(of: self.generalVM.config?.name) { _, newName in
             if let newName {
                 self.deviceName = newName

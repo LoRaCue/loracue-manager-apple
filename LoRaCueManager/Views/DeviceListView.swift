@@ -5,6 +5,7 @@ import SwiftUI
 import AppKit
 #endif
 
+// swiftlint:disable:next type_body_length
 struct DeviceListView: View {
     @ObservedObject var service: LoRaCueService
     @StateObject private var viewModel: DeviceListViewModel

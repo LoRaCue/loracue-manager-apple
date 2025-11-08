@@ -80,12 +80,16 @@ struct PairedDevicesView: View {
             }
             await self.viewModel.load()
         }
-        .sheet(item: self.$editingDevice, onDismiss: {
-            self.editingDevice = nil
-        }) { device in
-            PairedDeviceModal(device: device.mac.isEmpty ? nil : device, viewModel: self.viewModel)
-                .presentationDetents([.medium, .large])
-        }
+        .sheet(
+            item: self.$editingDevice,
+            onDismiss: {
+                self.editingDevice = nil
+            },
+            content: { device in
+                PairedDeviceModal(device: device.mac.isEmpty ? nil : device, viewModel: self.viewModel)
+                    .presentationDetents([.medium, .large])
+            }
+        )
         .alert("Error", isPresented: .constant(self.viewModel.error != nil)) {
             Button("OK") { self.viewModel.error = nil }
         } message: {

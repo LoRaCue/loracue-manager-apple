@@ -36,16 +36,16 @@ class FirmwareDownloader {
         let manifest = try parseManifest(from: baseDir)
 
         // Verify and load binaries
-        let (firmwareData, bootloaderData, partitionTableData) = try verifyBinaries(
+        let binaries = try verifyBinaries(
             manifest: manifest,
             baseDir: baseDir
         )
 
         return FirmwarePackage(
             manifest: manifest,
-            firmwareData: firmwareData,
-            bootloaderData: bootloaderData,
-            partitionTableData: partitionTableData,
+            firmwareData: binaries.firmware,
+            bootloaderData: binaries.bootloader,
+            partitionTableData: binaries.partitionTable,
             sourceUrl: zipUrl
         )
     }
@@ -117,7 +117,13 @@ class FirmwareDownloader {
         Logger.firmware.info("✅ Manifest signature verified")
     }
 
-    private func verifyBinaries(manifest: FirmwareManifest, baseDir: URL) throws -> (Data, Data, Data) {
+    private struct BinaryData {
+        let firmware: Data
+        let bootloader: Data
+        let partitionTable: Data
+    }
+
+    private func verifyBinaries(manifest: FirmwareManifest, baseDir: URL) throws -> BinaryData {
         let binaries = [
             (manifest.firmware.file, manifest.firmware.sha256),
             (manifest.bootloader.file, manifest.bootloader.sha256),
@@ -167,7 +173,11 @@ class FirmwareDownloader {
             }
         }
 
-        return (loadedData[0], loadedData[1], loadedData[2])
+        return BinaryData(
+            firmware: loadedData[0],
+            bootloader: loadedData[1],
+            partitionTable: loadedData[2]
+        )
     }
 
     // MARK: - Validate Raw Binary
