@@ -260,7 +260,47 @@ private struct DetailContent: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .navigationTitle(self.deviceName)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                HStack(spacing: 8) {
+                    Button {
+                        self.navigatePrevious()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                    .disabled(!self.canNavigatePrevious)
+
+                    Button {
+                        self.navigateNext()
+                    } label: {
+                        Image(systemName: "chevron.right")
+                    }
+                    .disabled(!self.canNavigateNext)
+                }
+            }
+        }
         #endif
+    }
+
+    private var canNavigatePrevious: Bool {
+        guard let currentIndex = ConfigTab.allCases.firstIndex(of: self.selectedTab) else { return false }
+        return currentIndex > 0
+    }
+
+    private var canNavigateNext: Bool {
+        guard let currentIndex = ConfigTab.allCases.firstIndex(of: self.selectedTab) else { return false }
+        return currentIndex < ConfigTab.allCases.count - 1
+    }
+
+    private func navigatePrevious() {
+        guard let currentIndex = ConfigTab.allCases.firstIndex(of: self.selectedTab), currentIndex > 0 else { return }
+        self.selectedTab = ConfigTab.allCases[currentIndex - 1]
+    }
+
+    private func navigateNext() {
+        guard let currentIndex = ConfigTab.allCases.firstIndex(of: self.selectedTab),
+              currentIndex < ConfigTab.allCases.count - 1 else { return }
+        self.selectedTab = ConfigTab.allCases[currentIndex + 1]
     }
 }
 

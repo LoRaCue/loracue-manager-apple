@@ -4,6 +4,8 @@ import SwiftUI
 struct PairedDevicesView: View {
     @StateObject private var viewModel: PairedDevicesViewModel
     @State private var editingDevice: PairedDevice?
+    @State private var hoveredDevice: String?
+    @State private var deviceToDelete: PairedDevice?
 
     init(service: LoRaCueService) {
         _viewModel = StateObject(wrappedValue: PairedDevicesViewModel(service: service))
@@ -44,6 +46,30 @@ struct PairedDevicesView: View {
 
                         Spacer()
 
+                        #if os(macOS)
+                        if self.hoveredDevice == device.mac {
+                            HStack(spacing: 12) {
+                                Button {
+                                    self.editingDevice = device
+                                } label: {
+                                    Image(systemName: "pencil")
+                                        .font(.system(size: 16))
+                                }
+                                .buttonStyle(.borderless)
+                                .help("Edit")
+
+                                Button {
+                                    self.deviceToDelete = device
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(.red)
+                                }
+                                .buttonStyle(.borderless)
+                                .help("Unpair")
+                            }
+                        }
+                        #else
                         Button {
                             self.editingDevice = device
                         } label: {
@@ -52,18 +78,47 @@ struct PairedDevicesView: View {
                                 .foregroundStyle(.blue)
                         }
                         .buttonStyle(.plain)
+                        #endif
                     }
-                    .padding(.vertical, 4)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            Task { await self.viewModel.delete(mac: device.mac) }
-                        } label: {
-                            Label("Delete", systemImage: "trash")
+                    .padding()
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(12)
+                    #if os(macOS)
+                        .onHover { isHovered in
+                            self.hoveredDevice = isHovered ? device.mac : nil
                         }
-                    }
+                        .contextMenu {
+                            Button {
+                                self.editingDevice = device
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
+                            Divider()
+                            Button(role: .destructive) {
+                                self.deviceToDelete = device
+                            } label: {
+                                Label("Unpair", systemImage: "trash")
+                            }
+                        }
+                    #else
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                Task { await self.viewModel.delete(mac: device.mac) }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                    #endif
                 }
             }
         }
+        #if os(iOS)
+        .formStyle(.grouped)
+        #endif
+        #if os(macOS)
+        .formStyle(.grouped)
+        .padding(16)
+        #endif
         .navigationTitle("Paired Devices")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -90,6 +145,30 @@ struct PairedDevicesView: View {
                     .presentationDetents([.medium, .large])
             }
         )
+        .confirmationDialog(
+            "Delete Device",
+            isPresented: Binding(
+                get: { self.deviceToDelete != nil },
+                set: { if !$0 { self.deviceToDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let device = self.deviceToDelete {
+                    Task {
+                        await self.viewModel.delete(mac: device.mac)
+                        self.deviceToDelete = nil
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                self.deviceToDelete = nil
+            }
+        } message: {
+            if let device = self.deviceToDelete {
+                Text("Are you sure you want to delete \"\(device.name)\"? This action cannot be undone.")
+            }
+        }
         .alert("Error", isPresented: .constant(self.viewModel.error != nil)) {
             Button("OK") { self.viewModel.error = nil }
         } message: {
@@ -121,46 +200,43 @@ struct PairedDeviceModal: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Device Information") {
-                    TextField("Device Name", text: self.$name)
-                        .textFieldStyle(.roundedBorder)
+                TextField("Device Name", text: self.$name)
 
-                    if self.device == nil {
-                        TextField("MAC Address", text: self.$mac)
-                            .textFieldStyle(.roundedBorder)
-                        #if os(iOS)
-                            .textInputAutocapitalization(.characters)
-                        #endif
-                            .autocorrectionDisabled()
-                            .onChange(of: self.mac) { _, newValue in
-                                let formatted = LoRaCalculator.formatMACAddress(newValue)
-                                self.mac = String(formatted.prefix(17))
-                            }
-                    } else {
-                        LabeledContent("MAC Address") {
-                            Text(self.mac)
-                                .foregroundStyle(.secondary)
-                                .font(.system(.body, design: .monospaced))
+                if self.device == nil {
+                    TextField("MAC Address", text: self.$mac)
+                    #if os(iOS)
+                        .textInputAutocapitalization(.characters)
+                    #endif
+                        .autocorrectionDisabled()
+                        .onChange(of: self.mac) { _, newValue in
+                            let formatted = LoRaCalculator.formatMACAddress(newValue)
+                            self.mac = String(formatted.prefix(17))
                         }
+                } else {
+                    LabeledContent("MAC Address") {
+                        Text(self.mac)
+                            .foregroundStyle(.secondary)
+                            .font(.system(.body, design: .monospaced))
                     }
                 }
 
                 Section("AES-256 Encryption Key") {
                     HStack {
                         if self.showKey {
-                            TextField("64 hex characters", text: self.$aesKey, axis: .horizontal)
+                            TextField("", text: self.$aesKey)
+                                .font(.system(.body, design: .monospaced))
                             #if os(iOS)
                                 .textInputAutocapitalization(.never)
                             #endif
                                 .autocorrectionDisabled()
-                                .font(.system(.body, design: .monospaced))
-                                .lineLimit(1)
+                                .onChange(of: self.aesKey) { _, newValue in
+                                    let filtered = newValue.filter(\.isHexDigit).lowercased()
+                                    self.aesKey = String(filtered.prefix(64))
+                                }
                         } else {
-                            Text(String(repeating: "•", count: 64))
+                            TextField("", text: .constant(String(repeating: "•", count: max(self.aesKey.count, 64))))
+                                .disabled(true)
                                 .font(.system(.body, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                            Spacer()
                         }
 
                         Button {
@@ -168,6 +244,7 @@ struct PairedDeviceModal: View {
                         } label: {
                             Image(systemName: self.showKey ? "eye.slash" : "eye")
                         }
+                        .buttonStyle(.plain)
                     }
 
                     HStack {
@@ -175,7 +252,7 @@ struct PairedDeviceModal: View {
                             self.aesKey = LoRaCalculator.generateRandomAESKey()
                             self.showKey = true
                         } label: {
-                            Label("Generate Random", systemImage: "dice")
+                            Label("Generate", systemImage: "dice")
                         }
 
                         Spacer()
@@ -192,19 +269,9 @@ struct PairedDeviceModal: View {
                         }
                         .disabled(self.aesKey.count != 64)
                     }
-                    .buttonStyle(.borderless)
-                }
-
-                if !self.aesKey.isEmpty, self.aesKey.count != 64 {
-                    Section {
-                        Label("Key must be exactly 64 hex characters", systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.orange)
-                    }
                 }
             }
-            #if os(macOS)
-            .padding(20)
-            #endif
+            .formStyle(.grouped)
             .navigationTitle(self.device == nil ? "Add Device" : "Device Details")
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
@@ -213,6 +280,7 @@ struct PairedDeviceModal: View {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") { self.dismiss() }
                     }
+
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Save") {
                             Task {
@@ -225,9 +293,6 @@ struct PairedDeviceModal: View {
                                 self.dismiss()
                             }
                         }
-                        .foregroundStyle(.blue)
-                        .fontWeight(self.isDirty ? .semibold : .regular)
-                        .opacity(self.isDirty ? 1.0 : 0.4)
                         .disabled(!self.isDirty)
                     }
                 }

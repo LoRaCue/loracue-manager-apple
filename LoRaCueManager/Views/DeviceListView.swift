@@ -232,7 +232,8 @@ struct DeviceListView: View {
                             name: path.components(separatedBy: "/").last ?? "Unknown",
                             type: "USB",
                             detail: path,
-                            isConnected: self.usbManager.isConnected
+                            isConnected: self.usbManager.isConnected,
+                            isSelected: self.selectedDevice == path
                         ) {
                             if self.usbManager.isConnected {
                                 self.usbManager.disconnect()
@@ -358,12 +359,14 @@ struct DeviceListView: View {
     private func deviceRowView(for peripheral: CBPeripheral) -> some View {
         let isConnected = self.bleManager.connectedPeripheral?.identifier == peripheral.identifier
         let advData = self.bleManager.getAdvertisementData(for: peripheral)
+        let isSelected = self.selectedDevice == peripheral.identifier.uuidString
 
         DeviceRow(
             name: advData?.model ?? self.deviceDisplayName(peripheral.name ?? "Unknown"),
             type: "BLE",
             detail: advData?.version ?? "",
-            isConnected: isConnected
+            isConnected: isConnected,
+            isSelected: isSelected
         ) {
             self.handleDeviceTap(peripheral: peripheral, isConnected: isConnected)
         }
@@ -401,6 +404,7 @@ struct DeviceRow: View {
     let type: String
     let detail: String
     let isConnected: Bool
+    let isSelected: Bool
     let onTap: () -> Void
 
     private var icon: String {
@@ -415,9 +419,9 @@ struct DeviceRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: self.icon)
-                .font(.title2)
+                .font(.system(size: 28))
                 .foregroundStyle(self.isConnected ? .green : .blue)
-                .frame(width: 32)
+                .frame(width: 40)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(self.name)
@@ -437,6 +441,7 @@ struct DeviceRow: View {
                     .foregroundStyle(.green)
                 }
             }
+            .frame(maxHeight: .infinity, alignment: .center)
 
             Spacer()
 
@@ -449,6 +454,16 @@ struct DeviceRow: View {
                 .help("Disconnect")
             }
         }
+        .padding(12)
+        .frame(height: 80)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(self.isSelected ? Color.accentColor.opacity(0.15) : Color.gray.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(self.isSelected ? Color.accentColor : Color.gray.opacity(0.2), lineWidth: 1)
+        )
         .contentShape(Rectangle())
         .onTapGesture {
             if !self.isConnected {

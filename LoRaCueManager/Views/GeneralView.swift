@@ -13,8 +13,6 @@ struct GeneralView: View {
                     // Device Name
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Device Name")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
                         TextField("Enter device name", text: Binding(
                             get: { config.name },
                             set: { self.viewModel.config?.name = $0 }
@@ -25,8 +23,6 @@ struct GeneralView: View {
                     // Operation Mode
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Operation Mode")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
                         HStack(spacing: 16) {
                             ModeButton(
                                 title: "Presenter",
@@ -46,8 +42,6 @@ struct GeneralView: View {
                     // Display Brightness
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Display Brightness: \(config.brightness)")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
                         Slider(value: Binding(
                             get: { Double(config.brightness) },
                             set: { self.viewModel.config?.brightness = Int($0) }
@@ -58,18 +52,20 @@ struct GeneralView: View {
                     HStack(alignment: .top, spacing: 24) {
                         // Slot ID
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Slot ID\n(Multi-PC Routing)")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                            Picker("", selection: Binding(
-                                get: { config.slotId },
-                                set: { self.viewModel.config?.slotId = $0 }
-                            )) {
-                                ForEach(1 ... 16, id: \.self) { slot in
-                                    Text("Slot \(slot)").tag(slot)
+                            HStack {
+                                Text("Slot ID\n(Multi-PC Routing)")
+                                    .fontWeight(.medium)
+                                Spacer()
+                                Picker("", selection: Binding(
+                                    get: { config.slotId },
+                                    set: { self.viewModel.config?.slotId = $0 }
+                                )) {
+                                    ForEach(1 ... 16, id: \.self) { slot in
+                                        Text("Slot \(slot)").tag(slot)
+                                    }
                                 }
+                                .labelsHidden()
                             }
-                            .labelsHidden()
                             Text("Select which PC is controlled or events are received for")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
@@ -80,7 +76,6 @@ struct GeneralView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 Text("Bluetooth")
-                                    .font(.subheadline)
                                     .fontWeight(.medium)
                                 Spacer()
                                 Toggle("", isOn: Binding(
@@ -93,6 +88,7 @@ struct GeneralView: View {
                                         }
                                     }
                                 ))
+                                .toggleStyle(.switch)
                                 .labelsHidden()
                             }
                             Text("Enable Bluetooth for wireless configuration")
@@ -115,10 +111,16 @@ struct GeneralView: View {
                             Text("Factory Reset")
                         }
                         .font(.system(size: 24))
+                        .foregroundColor(Color(red: 0.6, green: 0, blue: 0))
                         .frame(maxWidth: .infinity)
                         .frame(height: 62)
                     }
                     .buttonStyle(.bordered)
+                    .tint(.gray)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color(red: 0.6, green: 0, blue: 0), lineWidth: 1)
+                    )
 
                 } else if self.viewModel.error != nil {
                     ContentUnavailableView(
@@ -135,8 +137,14 @@ struct GeneralView: View {
                     .padding()
                 }
             }
-            .padding(32)
+            .padding(16)
         }
+        #if os(iOS)
+        .formStyle(.grouped)
+        #endif
+        #if os(macOS)
+        .formStyle(.grouped)
+        #endif
         .navigationTitle("General Settings")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

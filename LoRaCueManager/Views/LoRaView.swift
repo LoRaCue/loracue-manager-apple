@@ -156,9 +156,8 @@ struct LoRaView: View {
         .formStyle(.grouped)
         #endif
         #if os(macOS)
-        .padding(.horizontal, 32)
-        .padding(.top, 0)
-        .padding(.bottom, 32)
+        .formStyle(.grouped)
+        .padding(16)
         #endif
     }
 
@@ -209,19 +208,20 @@ struct AESKeyModal: View {
                 Section("AES-256 Encryption Key") {
                     HStack {
                         if self.showKey {
-                            TextField("64 hex characters", text: self.$aesKey, axis: .horizontal)
+                            TextField("", text: self.$aesKey)
+                                .font(.system(.body, design: .monospaced))
                             #if os(iOS)
                                 .textInputAutocapitalization(.never)
                             #endif
                                 .autocorrectionDisabled()
-                                .font(.system(.body, design: .monospaced))
-                                .lineLimit(1)
+                                .onChange(of: self.aesKey) { _, newValue in
+                                    let filtered = newValue.filter(\.isHexDigit).lowercased()
+                                    self.aesKey = String(filtered.prefix(64))
+                                }
                         } else {
-                            Text(String(repeating: "•", count: 64))
+                            TextField("", text: .constant(String(repeating: "•", count: max(self.aesKey.count, 64))))
+                                .disabled(true)
                                 .font(.system(.body, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                            Spacer()
                         }
 
                         Button {
@@ -229,14 +229,17 @@ struct AESKeyModal: View {
                         } label: {
                             Image(systemName: self.showKey ? "eye.slash" : "eye")
                         }
+                        .buttonStyle(.plain)
                     }
+                }
 
+                Section {
                     HStack {
                         Button {
                             self.aesKey = LoRaCalculator.generateRandomAESKey()
                             self.showKey = true
                         } label: {
-                            Label("Generate Random", systemImage: "dice")
+                            Label("Generate", systemImage: "dice")
                         }
 
                         Spacer()
@@ -253,19 +256,9 @@ struct AESKeyModal: View {
                         }
                         .disabled(self.aesKey.count != 64)
                     }
-                    .buttonStyle(.borderless)
-                }
-
-                if !self.aesKey.isEmpty, self.aesKey.count != 64 {
-                    Section {
-                        Label("Key must be exactly 64 hex characters", systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.orange)
-                    }
                 }
             }
-            #if os(macOS)
-            .padding(20)
-            #endif
+            .formStyle(.grouped)
             .navigationTitle("AES-256 Key")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -278,9 +271,6 @@ struct AESKeyModal: View {
                             self.dismiss()
                         }
                     }
-                    .foregroundStyle(.blue)
-                    .fontWeight(self.isDirty ? .semibold : .regular)
-                    .opacity(self.isDirty ? 1.0 : 0.4)
                     .disabled(!self.isDirty)
                 }
             }

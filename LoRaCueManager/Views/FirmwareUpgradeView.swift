@@ -78,8 +78,12 @@ struct FirmwareUpgradeView: View {
         } message: {
             Text("This will update your device firmware. The device will restart after the upgrade.")
         }
+        #if os(iOS)
+        .formStyle(.grouped)
+        #endif
         #if os(macOS)
-        .padding(32)
+        .formStyle(.grouped)
+        .padding(16)
         #endif
     }
 

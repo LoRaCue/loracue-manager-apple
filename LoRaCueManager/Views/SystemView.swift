@@ -40,9 +40,8 @@ struct SystemView: View {
         .formStyle(.grouped)
         #endif
         #if os(macOS)
-        .padding(.horizontal, 32)
-        .padding(.top, 0)
-        .padding(.bottom, 32)
+        .formStyle(.grouped)
+        .padding(16)
         #endif
         .navigationTitle("System")
         .task {
