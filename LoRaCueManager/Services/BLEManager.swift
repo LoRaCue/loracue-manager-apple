@@ -54,8 +54,15 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
     private var responseBuffer = ""
     private var responseContinuation: CheckedContinuation<String, Error>?
     private var responseAccumulationTask: Task<Void, Never>?
-    private var commandQueue: [() async throws -> Void] = []
-    private var isProcessingCommand = false
+    private var timeoutTask: Task<Void, Never>?
+
+    private struct QueuedCommand {
+        let command: String
+        let continuation: CheckedContinuation<String, Error>
+    }
+
+    private var commandQueue: [QueuedCommand] = []
+    private var isProcessingQueue = false
 
     // Nordic UART Service UUIDs
     private nonisolated(unsafe) let nusServiceUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
@@ -106,24 +113,34 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
     }
 
     func sendCommand(_ command: String) async throws -> String {
-        // Serialize commands through a queue
-        try await withCheckedThrowingContinuation { queueContinuation in
+        try await withCheckedThrowingContinuation { continuation in
             Task { @MainActor in
-                // Wait for previous command to finish
-                while self.isProcessingCommand {
-                    try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
-                }
-
-                self.isProcessingCommand = true
-                defer { self.isProcessingCommand = false }
-
-                do {
-                    let result = try await self.sendCommandInternal(command)
-                    queueContinuation.resume(returning: result)
-                } catch {
-                    queueContinuation.resume(throwing: error)
+                self.commandQueue.append(QueuedCommand(command: command, continuation: continuation))
+                if !self.isProcessingQueue {
+                    self.processCommandQueue()
                 }
             }
+        }
+    }
+
+    private func processCommandQueue() {
+        guard !self.isProcessingQueue, !self.commandQueue.isEmpty else { return }
+
+        self.isProcessingQueue = true
+
+        Task { @MainActor in
+            while !self.commandQueue.isEmpty {
+                let queued = self.commandQueue.removeFirst()
+
+                do {
+                    let result = try await self.sendCommandInternal(queued.command)
+                    queued.continuation.resume(returning: result)
+                } catch {
+                    queued.continuation.resume(throwing: error)
+                }
+            }
+
+            self.isProcessingQueue = false
         }
     }
 
@@ -153,6 +170,9 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
         let result: String
         do {
             result = try await withCheckedThrowingContinuation { continuation in
+                // Cancel any previous timeout
+                self.timeoutTask?.cancel()
+
                 self.responseContinuation = continuation
                 self.responseBuffer = ""
 
@@ -160,8 +180,12 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
                 Logger.ble.info("📤 Writing \(data.count) bytes to TX characteristic")
                 peripheral.writeValue(data, for: tx, type: .withResponse)
 
-                Task { @MainActor in
-                    try await Task.sleep(nanoseconds: 5_000_000_000) // 5s timeout
+                self.timeoutTask = Task { @MainActor in
+                    do {
+                        try await Task.sleep(nanoseconds: 5_000_000_000) // 5s timeout
+                    } catch {
+                        return // Task was cancelled
+                    }
                     if self.responseContinuation != nil {
                         Logger.ble.error("⏱️ Command timed out: \(command)")
                         self.responseContinuation?.resume(throwing: BLEError.timeout)
@@ -171,11 +195,14 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
             }
         } catch {
             // Clean up on error
+            self.timeoutTask?.cancel()
             self.responseContinuation = nil
             self.responseBuffer = ""
             throw error
         }
 
+        // Cancel timeout on success
+        self.timeoutTask?.cancel()
         return result
     }
 }
