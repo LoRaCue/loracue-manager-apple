@@ -31,9 +31,8 @@ struct LoRaView: View {
                 }
 
                 Section("Parameters") {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Frequency: \(Double(config.frequency) / 1000.0, specifier: "%.1f") MHz")
-                        if let band = viewModel.bands.first(where: { $0.id == config.bandId }) {
+                    if let band = viewModel.bands.first(where: { $0.id == config.bandId }) {
+                        LabeledContent("Frequency: \(Double(config.frequency) / 1000.0, specifier: "%.1f") MHz") {
                             Slider(value: Binding(
                                 get: {
                                     let rounded = (config.frequency / 100) * 100
@@ -44,6 +43,7 @@ struct LoRaView: View {
                                     self.viewModel.config?.frequency = rounded
                                 }
                             ), in: Double(band.minKhz) ... Double(band.maxKhz), step: 100)
+                                .frame(width: 200)
                         }
                     }
 
@@ -113,9 +113,9 @@ struct LoRaView: View {
                             Text("AES-256 Key")
                             Spacer()
                             Image(systemName: "chevron.right")
-                                .font(.caption)
                                 .foregroundColor(.secondary)
                         }
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }

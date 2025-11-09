@@ -12,12 +12,12 @@ struct PowerView: View {
                         set: { self.viewModel.config?.displaySleepEnabled = $0 }
                     ))
 
-                    VStack(alignment: .leading) {
-                        Text("Timeout: \(LoRaCalculator.formatTimeout(config.displaySleepTimeoutMs))")
+                    LabeledContent("Timeout: \(LoRaCalculator.formatTimeout(config.displaySleepTimeoutMs))") {
                         Slider(value: Binding(
                             get: { Double(config.displaySleepTimeoutMs) },
                             set: { self.viewModel.config?.displaySleepTimeoutMs = Int($0) }
                         ), in: 1000 ... 300_000, step: 1000)
+                            .frame(width: 200)
                     }
                 }
 
@@ -27,12 +27,12 @@ struct PowerView: View {
                         set: { self.viewModel.config?.lightSleepEnabled = $0 }
                     ))
 
-                    VStack(alignment: .leading) {
-                        Text("Timeout: \(LoRaCalculator.formatTimeout(config.lightSleepTimeoutMs))")
+                    LabeledContent("Timeout: \(LoRaCalculator.formatTimeout(config.lightSleepTimeoutMs))") {
                         Slider(value: Binding(
                             get: { Double(config.lightSleepTimeoutMs) },
                             set: { self.viewModel.config?.lightSleepTimeoutMs = Int($0) }
                         ), in: 1000 ... 300_000, step: 1000)
+                            .frame(width: 200)
                     }
                 }
 
@@ -42,12 +42,12 @@ struct PowerView: View {
                         set: { self.viewModel.config?.deepSleepEnabled = $0 }
                     ))
 
-                    VStack(alignment: .leading) {
-                        Text("Timeout: \(LoRaCalculator.formatTimeout(config.deepSleepTimeoutMs))")
+                    LabeledContent("Timeout: \(LoRaCalculator.formatTimeout(config.deepSleepTimeoutMs))") {
                         Slider(value: Binding(
                             get: { Double(config.deepSleepTimeoutMs) },
                             set: { self.viewModel.config?.deepSleepTimeoutMs = Int($0) }
                         ), in: 1000 ... 600_000, step: 1000)
+                            .frame(width: 200)
                     }
                 }
             } else {
