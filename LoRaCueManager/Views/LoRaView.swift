@@ -43,7 +43,11 @@ struct LoRaView: View {
                                     self.viewModel.config?.frequency = rounded
                                 }
                             ), in: Double(band.minKhz) ... Double(band.maxKhz), step: 100)
+                            #if os(macOS)
                                 .frame(width: 200)
+                            #else
+                                .frame(maxWidth: .infinity)
+                            #endif
                         }
                     }
 

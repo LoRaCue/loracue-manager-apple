@@ -18,12 +18,59 @@ struct FirmwareUpgradeView: View {
     var body: some View {
         Form {
             Section {
-                Picker("Source", selection: self.$selectedTab) {
-                    Text("Releases").tag(0)
-                    Text("Zip Archive").tag(1)
-                    Text("Binary File").tag(2)
+                #if os(iOS)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        self.sourceCard(
+                            icon: "arrow.down.circle.fill",
+                            title: "Release",
+                            subtitle: "GitHub release",
+                            tag: 0
+                        )
+
+                        self.sourceCard(
+                            icon: "archivebox.fill",
+                            title: "ZIP",
+                            subtitle: "Firmware archive file",
+                            tag: 1
+                        )
+
+                        self.sourceCard(
+                            icon: "doc.fill",
+                            title: "BIN",
+                            subtitle: "Firmware binary file",
+                            tag: 2
+                        )
+                    }
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 8)
                 }
-                .pickerStyle(.segmented)
+                .frame(height: 80)
+                #else
+                HStack(spacing: 12) {
+                    self.sourceCard(
+                        icon: "arrow.down.circle.fill",
+                        title: "Release",
+                        subtitle: "GitHub release",
+                        tag: 0
+                    )
+
+                    self.sourceCard(
+                        icon: "archivebox.fill",
+                        title: "ZIP",
+                        subtitle: "Firmware archive file",
+                        tag: 1
+                    )
+
+                    self.sourceCard(
+                        icon: "doc.fill",
+                        title: "BIN",
+                        subtitle: "Firmware binary file",
+                        tag: 2
+                    )
+                }
+                .frame(height: 80)
+                #endif
 
                 if self.selectedTab == 0 {
                     Toggle("Include Pre-releases", isOn: self.$viewModel.includePrerelease)
@@ -90,61 +137,128 @@ struct FirmwareUpgradeView: View {
         }
     }
 
+    // MARK: - Source Card
+
+    @ViewBuilder
+    private func sourceCard(icon: String, title: String, subtitle: String, tag: Int) -> some View {
+        Button {
+            self.selectedTab = tag
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 28))
+                    .foregroundColor(self.selectedTab == tag ? .accentColor : .secondary)
+                    .frame(width: 40)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.headline)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+            }
+            .padding(12)
+            #if os(iOS)
+                .frame(width: 200)
+            #else
+                .frame(maxWidth: .infinity)
+            #endif
+                .background(self.selectedTab == tag ? Color.accentColor.opacity(0.1) : Color.gray.opacity(0.05))
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(self.selectedTab == tag ? Color.accentColor : Color.clear, lineWidth: 2)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - GitHub Sections
 
     @ViewBuilder
     private var githubSections: some View {
-        Section("Available Releases") {
+        Section {
             if self.viewModel.isLoading {
                 ProgressView()
             } else if self.viewModel.releases.isEmpty {
                 Text("No releases found")
                     .foregroundColor(.secondary)
             } else {
-                ForEach(self.viewModel.releases) { release in
-                    Button {
-                        Task { await self.viewModel.selectRelease(release) }
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(release.name)
-                                    .font(.headline)
-                                Text(release.tagName)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                VStack(spacing: 8) {
+                    ForEach(self.viewModel.releases) { release in
+                        Button {
+                            Task { await self.viewModel.selectRelease(release) }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "arrow.down.circle.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.blue)
+                                    .frame(width: 32)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(release.name)
+                                        .font(.headline)
+                                    Text(release.tagName)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                Spacer()
+
+                                if release.prerelease {
+                                    Text("PRE")
+                                        .font(.caption)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.orange.opacity(0.2))
+                                        .cornerRadius(4)
+                                }
                             }
-                            Spacer()
-                            if release.prerelease {
-                                Text("PRE")
-                                    .font(.caption)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Color.orange.opacity(0.2))
-                                    .cornerRadius(4)
-                            }
+                            .padding(12)
+                            .background(Color.gray.opacity(0.05))
+                            .cornerRadius(8)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
             }
         }
 
         if !self.viewModel.manifests.isEmpty {
-            Section("Select Firmware") {
-                ForEach(self.viewModel.manifests, id: \.model) { manifest in
-                    Button {
-                        self.viewModel.selectedManifest = manifest
-                        self.pendingUpgradeAction = {
-                            Task { await self.viewModel.upgradeFromGitHub() }
+            Section {
+                VStack(spacing: 8) {
+                    ForEach(self.viewModel.manifests, id: \.model) { manifest in
+                        Button {
+                            self.viewModel.selectedManifest = manifest
+                            self.pendingUpgradeAction = {
+                                Task { await self.viewModel.upgradeFromGitHub() }
+                            }
+                            self.showUpgradeConfirmation = true
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "cpu.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.green)
+                                    .frame(width: 32)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(manifest.model)
+                                        .font(.headline)
+                                    Text("\(manifest.boardName) • \(manifest.version)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                Spacer()
+                            }
+                            .padding(12)
+                            .background(Color.gray.opacity(0.05))
+                            .cornerRadius(8)
                         }
-                        self.showUpgradeConfirmation = true
-                    } label: {
-                        VStack(alignment: .leading) {
-                            Text(manifest.model)
-                                .font(.headline)
-                            Text("\(manifest.boardName) • \(manifest.version)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }

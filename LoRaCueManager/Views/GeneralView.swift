@@ -117,10 +117,12 @@ struct GeneralView: View {
                     }
                     .buttonStyle(.bordered)
                     .tint(.gray)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color(red: 0.6, green: 0, blue: 0), lineWidth: 1)
-                    )
+                    #if os(macOS)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color(red: 0.6, green: 0, blue: 0), lineWidth: 1)
+                        )
+                    #endif
 
                 } else if self.viewModel.error != nil {
                     ContentUnavailableView(
