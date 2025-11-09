@@ -16,9 +16,11 @@ struct LoRaView: View {
                         get: { config.bandId },
                         set: { newBand in
                             self.showBandWarning = true
-                            self.viewModel.config?.bandId = newBand
                             if let band = viewModel.bands.first(where: { $0.id == newBand }) {
-                                self.viewModel.config?.frequency = band.centerKhz
+                                var updatedConfig = config
+                                updatedConfig.bandId = newBand
+                                updatedConfig.frequency = band.centerKhz
+                                self.viewModel.config = updatedConfig
                             }
                         }
                     )) {
@@ -30,11 +32,17 @@ struct LoRaView: View {
 
                 Section("Parameters") {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Frequency: \(config.frequency / 1000, specifier: "%.1f") MHz")
+                        Text("Frequency: \(Double(config.frequency) / 1000.0, specifier: "%.1f") MHz")
                         if let band = viewModel.bands.first(where: { $0.id == config.bandId }) {
                             Slider(value: Binding(
-                                get: { Double(config.frequency) },
-                                set: { self.viewModel.config?.frequency = Int($0) }
+                                get: {
+                                    let rounded = (config.frequency / 100) * 100
+                                    return Double(rounded)
+                                },
+                                set: { newValue in
+                                    let rounded = (Int(newValue) / 100) * 100
+                                    self.viewModel.config?.frequency = rounded
+                                }
                             ), in: Double(band.minKhz) ... Double(band.maxKhz), step: 100)
                         }
                     }
@@ -63,10 +71,18 @@ struct LoRaView: View {
                         Text("4/8").tag(8)
                     }
 
-                    Stepper("TX Power: \(config.txPower) dBm", value: Binding(
-                        get: { config.txPower },
-                        set: { self.viewModel.config?.txPower = $0 }
-                    ), in: 2 ... 20)
+                    HStack {
+                        if let band = viewModel.bands.first(where: { $0.id == config.bandId }),
+                           config.txPower > band.maxPowerDbm
+                        {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.yellow)
+                        }
+                        Stepper("TX Power: \(config.txPower) dBm", value: Binding(
+                            get: { config.txPower },
+                            set: { self.viewModel.config?.txPower = $0 }
+                        ), in: 2 ... 20)
+                    }
                 }
 
                 Section("Performance Estimate") {
@@ -158,7 +174,8 @@ struct LoRaView: View {
                             preset: preset,
                             isSelected: config.spreadingFactor == preset.sf &&
                                 config.bandwidth == preset.bw &&
-                                config.codingRate == preset.cr
+                                config.codingRate == preset.cr &&
+                                config.txPower == preset.power
                         ) {
                             self.viewModel.applyPreset(preset)
                         }
