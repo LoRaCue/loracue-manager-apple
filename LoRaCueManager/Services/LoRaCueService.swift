@@ -204,6 +204,10 @@ class LoRaCueService: ObservableObject {
         try await self.sendRequest(method: "lora:bands")
     }
 
+    func getLoRaPresets() async throws -> [LoRaPreset] {
+        try await self.sendRequest(method: "lora:presets:list")
+    }
+
     func getLoRaKey() async throws -> LoRaKey {
         try await self.sendRequest(method: "lora:key:get")
     }

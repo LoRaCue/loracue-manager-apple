@@ -165,6 +165,7 @@ class PowerViewModel: ObservableObject {
 class LoRaViewModel: ObservableObject {
     @Published var config: LoRaConfig?
     @Published var bands: [LoRaBand] = []
+    @Published var presets: [LoRaPreset] = []
     @Published var isLoading = false
     @Published var error: String?
     @Published var showBandWarning = false
@@ -193,12 +194,14 @@ class LoRaViewModel: ObservableObject {
         do {
             async let configTask = self.service.getLoRa()
             async let bandsTask = self.service.getLoRaBands()
+            async let presetsTask = self.service.getLoRaPresets()
 
             let loadedConfig = try await configTask
             self.config = loadedConfig
             self.originalConfig = loadedConfig
             self.isDirty = false
             self.bands = try await bandsTask
+            self.presets = await (try? presetsTask) ?? []
         } catch {
             self.error = error.localizedDescription
         }
@@ -239,18 +242,24 @@ class LoRaViewModel: ObservableObject {
     }
 }
 
-struct LoRaPreset {
+struct LoRaPreset: Codable, Identifiable {
     let name: String
+    let description: String?
     let sf: Int
     let bw: Int
     let cr: Int
     let power: Int
 
-    static let presets = [
-        LoRaPreset(name: "Conference", sf: 7, bw: 125, cr: 5, power: 14),
-        LoRaPreset(name: "Auditorium", sf: 9, bw: 125, cr: 5, power: 17),
-        LoRaPreset(name: "Stadium", sf: 12, bw: 125, cr: 8, power: 20)
-    ]
+    var id: String { self.name }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case description
+        case sf = "spreading_factor"
+        case bw = "bandwidth_khz"
+        case cr = "coding_rate"
+        case power = "tx_power_dbm"
+    }
 }
 
 // MARK: - Paired Devices ViewModel

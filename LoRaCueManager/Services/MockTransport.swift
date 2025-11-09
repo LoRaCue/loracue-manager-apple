@@ -36,6 +36,15 @@ class MockTransport: DeviceTransport {
         "min_khz":430000,"max_khz":440000,"max_power_dbm":10}],"id":ID}
         """,
 
+        "lora:presets:list": """
+        {"jsonrpc":"2.0","result":[{"name":"Conference","description":"100m range - Fast & low latency",\
+        "spreading_factor":7,"bandwidth_khz":500,"coding_rate":5,"tx_power_dbm":14},\
+        {"name":"Auditorium","description":"250m range - Balanced","spreading_factor":9,\
+        "bandwidth_khz":125,"coding_rate":7,"tx_power_dbm":17},\
+        {"name":"Stadium","description":"500m range - Maximum reliability","spreading_factor":10,\
+        "bandwidth_khz":125,"coding_rate":8,"tx_power_dbm":20}],"id":ID}
+        """,
+
         "lora:key:get": """
         {"jsonrpc":"2.0","result":{"aes_key":\
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},"id":ID}

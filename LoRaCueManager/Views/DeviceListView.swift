@@ -202,6 +202,11 @@ struct DeviceListView: View {
             )) {
                 DeviceDetailView(service: self.service)
             }
+            .onReceive(self.bleManager.$connectionState) { state in
+                if state == .disconnected {
+                    self.selectedDevice = nil
+                }
+            }
             #endif
         }
     }

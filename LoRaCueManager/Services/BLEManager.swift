@@ -161,7 +161,7 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
                 peripheral.writeValue(data, for: tx, type: .withResponse)
 
                 Task { @MainActor in
-                    try await Task.sleep(nanoseconds: 3_000_000_000) // 3s timeout
+                    try await Task.sleep(nanoseconds: 5_000_000_000) // 5s timeout
                     if self.responseContinuation != nil {
                         Logger.ble.error("⏱️ Command timed out: \(command)")
                         self.responseContinuation?.resume(throwing: BLEError.timeout)

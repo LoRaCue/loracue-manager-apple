@@ -89,7 +89,7 @@ struct LoRaView: View {
                     HStack {
                         Text("Time on Air:")
                         Spacer()
-                        Text("\(self.viewModel.performance.latency) ms")
+                        Text("\(Int(self.viewModel.performance.latency)) ms")
                             .foregroundColor(.secondary)
                     }
                     HStack {
@@ -166,26 +166,28 @@ struct LoRaView: View {
 
     @ViewBuilder
     private func presetsSection(config: LoRaConfig) -> some View {
-        Section {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(LoRaPreset.presets, id: \.name) { preset in
-                        PresetCard(
-                            preset: preset,
-                            isSelected: config.spreadingFactor == preset.sf &&
-                                config.bandwidth == preset.bw &&
-                                config.codingRate == preset.cr &&
-                                config.txPower == preset.power
-                        ) {
-                            self.viewModel.applyPreset(preset)
+        if !self.viewModel.presets.isEmpty {
+            Section {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(self.viewModel.presets) { preset in
+                            PresetCard(
+                                preset: preset,
+                                isSelected: config.spreadingFactor == preset.sf &&
+                                    config.bandwidth == preset.bw &&
+                                    config.codingRate == preset.cr &&
+                                    config.txPower == preset.power
+                            ) {
+                                self.viewModel.applyPreset(preset)
+                            }
                         }
                     }
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 8)
                 }
-                .padding(.horizontal, 4)
-                .padding(.vertical, 8)
+            } header: {
+                Text("Quick Presets")
             }
-        } header: {
-            Text("Quick Presets")
         }
     }
 }
