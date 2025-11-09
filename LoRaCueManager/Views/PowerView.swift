@@ -54,13 +54,7 @@ struct PowerView: View {
                 ProgressView()
             }
         }
-        #if os(iOS)
         .formStyle(.grouped)
-        #endif
-        #if os(macOS)
-        .formStyle(.grouped)
-        .padding(16)
-        #endif
         .navigationTitle("Power Management")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

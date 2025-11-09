@@ -83,7 +83,7 @@ struct FirmwareUpgradeView: View {
         #endif
         #if os(macOS)
         .formStyle(.grouped)
-        .padding(16)
+        .padding(20)
         #endif
     }
 

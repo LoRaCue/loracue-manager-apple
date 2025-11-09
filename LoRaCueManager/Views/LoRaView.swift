@@ -152,13 +152,7 @@ struct LoRaView: View {
         } message: {
             Text(self.viewModel.error ?? "")
         }
-        #if os(iOS)
         .formStyle(.grouped)
-        #endif
-        #if os(macOS)
-        .formStyle(.grouped)
-        .padding(16)
-        #endif
     }
 
     // MARK: - Helper Views

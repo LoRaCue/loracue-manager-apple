@@ -112,13 +112,7 @@ struct PairedDevicesView: View {
                 }
             }
         }
-        #if os(iOS)
         .formStyle(.grouped)
-        #endif
-        #if os(macOS)
-        .formStyle(.grouped)
-        .padding(16)
-        #endif
         .navigationTitle("Paired Devices")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

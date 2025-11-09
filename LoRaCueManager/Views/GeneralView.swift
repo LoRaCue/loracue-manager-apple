@@ -137,14 +137,9 @@ struct GeneralView: View {
                     .padding()
                 }
             }
-            .padding(16)
+            .padding(20)
         }
-        #if os(iOS)
         .formStyle(.grouped)
-        #endif
-        #if os(macOS)
-        .formStyle(.grouped)
-        #endif
         .navigationTitle("General Settings")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
