@@ -212,29 +212,31 @@ extension BLEManager: CBCentralManagerDelegate {
         rssi RSSI: NSNumber
     ) {
         Task { @MainActor in
+            guard peripheral.name?.hasPrefix("LoRaCue") == true else { return }
+
             Logger.ble.info("📱 Discovered device: \(peripheral.name ?? "Unknown") (\(peripheral.identifier))")
 
-            // Parse service data
+            // Parse manufacturer data
             var advData: DeviceAdvertisementData?
-            if let serviceDataDict = advertisementData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data] {
-                let nusUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
-                if let data = serviceDataDict[nusUUID], data.count >= 6 {
-                    let major = data[0]
-                    let minor = data[1]
-                    let patch = data[2]
-                    let buildFlags = UInt16(data[3]) | (UInt16(data[4]) << 8)
-                    let buildNumber = (buildFlags >> 2) & 0x3FFF
-                    let releaseType = buildFlags & 0b11
-                    let modelName = String(cString: Array(data[5...]))
+            Logger.ble.debug("📊 Advertisement data keys: \(advertisementData.keys)")
+            if let mfgData = advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data, mfgData.count >= 7 {
+                Logger.ble.debug("📊 Manufacturer data length: \(mfgData.count) bytes")
+                // Skip company ID (first 2 bytes)
+                let major = mfgData[2]
+                let minor = mfgData[3]
+                let patch = mfgData[4]
+                let buildFlags = UInt16(mfgData[5]) | (UInt16(mfgData[6]) << 8)
+                let buildNumber = (buildFlags >> 2) & 0x3FFF
+                let releaseType = buildFlags & 0b11
+                let modelName = String(data: mfgData[7...], encoding: .utf8) ?? "Unknown"
 
-                    let typeString = ["", "beta", "alpha", "dev"][Int(releaseType)]
-                    let versionString = buildNumber > 0 && !typeString.isEmpty
-                        ? "v\(major).\(minor).\(patch)-\(typeString).\(buildNumber)"
-                        : "v\(major).\(minor).\(patch)"
+                let typeString = ["", "beta", "alpha", "dev"][Int(releaseType)]
+                let versionString = buildNumber > 0 && !typeString.isEmpty
+                    ? "v\(major).\(minor).\(patch)-\(typeString).\(buildNumber)"
+                    : "v\(major).\(minor).\(patch)"
 
-                    advData = DeviceAdvertisementData(model: modelName, version: versionString)
-                    Logger.ble.info("📦 Parsed: \(modelName) \(versionString)")
-                }
+                advData = DeviceAdvertisementData(model: modelName, version: versionString)
+                Logger.ble.info("📦 Parsed: \(modelName) \(versionString)")
             }
 
             if !self.discoveredDevices.contains(where: { $0.identifier == peripheral.identifier }) {

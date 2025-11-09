@@ -247,9 +247,9 @@ struct LoRaPreset {
     let power: Int
 
     static let presets = [
-        LoRaPreset(name: "Conference", sf: 7, bw: 125_000, cr: 5, power: 14),
-        LoRaPreset(name: "Auditorium", sf: 9, bw: 125_000, cr: 5, power: 17),
-        LoRaPreset(name: "Stadium", sf: 12, bw: 125_000, cr: 8, power: 20)
+        LoRaPreset(name: "Conference", sf: 7, bw: 125, cr: 5, power: 14),
+        LoRaPreset(name: "Auditorium", sf: 9, bw: 125, cr: 5, power: 17),
+        LoRaPreset(name: "Stadium", sf: 12, bw: 125, cr: 8, power: 20)
     ]
 }
 

@@ -89,11 +89,11 @@ struct LoRaConfig: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case bandId = "band_id"
-        case frequency
+        case frequency = "frequency_khz"
         case spreadingFactor = "spreading_factor"
-        case bandwidth
+        case bandwidth = "bandwidth_khz"
         case codingRate = "coding_rate"
-        case txPower = "tx_power"
+        case txPower = "tx_power_dbm"
     }
 }
 

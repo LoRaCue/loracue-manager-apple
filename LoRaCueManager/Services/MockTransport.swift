@@ -27,8 +27,8 @@ class MockTransport: DeviceTransport {
         """,
 
         "lora:get": """
-        {"jsonrpc":"2.0","result":{"band_id":"HW_433","frequency":433000,"spreading_factor":7,\
-        "bandwidth":500,"coding_rate":5,"tx_power":20},"id":ID}
+        {"jsonrpc":"2.0","result":{"band_id":"HW_433","frequency_khz":433000,"spreading_factor":7,\
+        "bandwidth_khz":500,"coding_rate":5,"tx_power_dbm":20},"id":ID}
         """,
 
         "lora:bands": """

@@ -30,11 +30,13 @@ struct LoRaView: View {
 
                 Section("Parameters") {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Frequency: \(config.frequency / 1000) MHz")
-                        Slider(value: Binding(
-                            get: { Double(config.frequency) },
-                            set: { self.viewModel.config?.frequency = Int($0) }
-                        ), in: 860_000 ... 870_000, step: 100)
+                        Text("Frequency: \(config.frequency / 1000, specifier: "%.1f") MHz")
+                        if let band = viewModel.bands.first(where: { $0.id == config.bandId }) {
+                            Slider(value: Binding(
+                                get: { Double(config.frequency) },
+                                set: { self.viewModel.config?.frequency = Int($0) }
+                            ), in: Double(band.minKhz) ... Double(band.maxKhz), step: 100)
+                        }
                     }
 
                     Stepper("Spreading Factor: \(config.spreadingFactor)", value: Binding(
@@ -154,7 +156,9 @@ struct LoRaView: View {
                     ForEach(LoRaPreset.presets, id: \.name) { preset in
                         PresetCard(
                             preset: preset,
-                            isSelected: config.spreadingFactor == preset.sf && config.bandwidth == preset.bw
+                            isSelected: config.spreadingFactor == preset.sf &&
+                                config.bandwidth == preset.bw &&
+                                config.codingRate == preset.cr
                         ) {
                             self.viewModel.applyPreset(preset)
                         }
@@ -285,7 +289,7 @@ private struct PresetCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("SF\(self.preset.sf)")
                         .font(.caption)
-                    Text("\(self.preset.bw / 1000) kHz")
+                    Text("\(self.preset.bw) kHz")
                         .font(.caption)
                 }
                 .foregroundColor(self.isSelected ? .white.opacity(0.9) : .secondary)

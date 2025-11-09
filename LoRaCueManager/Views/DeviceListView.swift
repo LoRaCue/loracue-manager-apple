@@ -10,6 +10,7 @@ struct DeviceListView: View {
     @ObservedObject var service: LoRaCueService
     @StateObject private var viewModel: DeviceListViewModel
     @State private var selectedDevice: String?
+    @State private var hasScanned = false
     @ObservedObject private var bleManager: BLEManager
 
     #if os(macOS)
@@ -86,22 +87,15 @@ struct DeviceListView: View {
                                         .frame(width: 32)
 
                                     VStack(alignment: .leading, spacing: 4) {
-                                        if let advData = self.bleManager.getAdvertisementData(for: peripheral),
-                                           let model = advData.model
-                                        {
-                                            Text(model)
-                                                .font(.headline)
-                                        } else {
-                                            Text(self.deviceDisplayName(peripheral.name ?? "Unknown"))
-                                                .font(.headline)
-                                        }
+                                        Text(self.deviceDisplayName(peripheral.name ?? "Unknown"))
+                                            .font(.headline)
 
-                                        if let advData = self.bleManager.getAdvertisementData(for: peripheral),
-                                           let version = advData.version
-                                        {
-                                            Text(version)
-                                                .font(.system(.caption, design: .monospaced))
-                                                .foregroundStyle(.secondary)
+                                        if let advData = self.bleManager.getAdvertisementData(for: peripheral) {
+                                            (Text(advData.model ?? "")
+                                                .foregroundStyle(.secondary) +
+                                                Text(advData.version.map { " \($0)" } ?? "")
+                                                .foregroundStyle(.tertiary))
+                                                .font(.caption)
                                         }
 
                                         if self.bleManager.connectedPeripheral?.identifier == peripheral.identifier {
@@ -148,18 +142,22 @@ struct DeviceListView: View {
                                         .font(.system(size: 48))
                                         .foregroundColor(.secondary)
 
-                                    Text("No Devices Found")
-                                        .font(.title2)
-                                        .fontWeight(.semibold)
+                                    if self.hasScanned {
+                                        Text("No Devices Found")
+                                            .font(.title2)
+                                            .fontWeight(.semibold)
+                                    }
                                 }
                             } description: {
                                 Text("Pull down to scan for nearby devices")
+                                    .font(.body)
                                     .multilineTextAlignment(.center)
                             }
                         }
                     }
                     .refreshable {
                         self.scan()
+                        self.hasScanned = true
                         try? await Task.sleep(nanoseconds: 10_000_000_000) // 10s scan
                         self.bleManager.stopScanning()
                     }
@@ -203,14 +201,6 @@ struct DeviceListView: View {
                 set: { if !$0 { self.selectedDevice = nil } }
             )) {
                 DeviceDetailView(service: self.service)
-            }
-            .task {
-                // Only scan once on initial app launch
-                if !self.bleManager.isScanning, self.bleManager.discoveredDevices.isEmpty {
-                    self.scan()
-                    try? await Task.sleep(nanoseconds: 10_000_000_000) // 10s auto-stop
-                    self.bleManager.stopScanning()
-                }
             }
             #endif
         }
@@ -390,6 +380,7 @@ struct DeviceListView: View {
         if self.bleManager.isScanning {
             self.bleManager.stopScanning()
         } else {
+            self.hasScanned = true
             self.bleManager.startScanning()
             #if os(macOS)
             self.usbManager.scanForDevices()
