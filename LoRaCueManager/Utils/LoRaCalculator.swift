@@ -3,8 +3,9 @@ import Foundation
 enum LoRaCalculator {
     /// Calculate Time on Air (latency in ms) and Range (in meters) based on LoRa parameters
     static func calculatePerformance(sf: Int, bw: Int, cr: Int, txPower: Int) -> (latency: Int, range: Int) {
-        // Time on Air calculation (simplified)
-        let symbolDuration = Double(1 << sf) / Double(bw) * 1000.0
+        // Time on Air calculation (bw is in kHz, convert to Hz)
+        let bwHz = Double(bw) * 1000.0
+        let symbolDuration = Double(1 << sf) / bwHz * 1000.0
         let preambleTime = (8.0 + 4.25) * symbolDuration
 
         let payloadSymbols = 8.0 + max(
@@ -17,7 +18,7 @@ enum LoRaCalculator {
 
         // Range calculation (indoor path loss model matching WebUI)
         // SX1262 sensitivity: -148 dBm @ SF12/BW125, improves ~2.5dB per SF step down
-        let sensitivity = -148.0 + Double(12 - sf) * 2.5 + (bw > 125_000 ? log2(Double(bw) / 125_000.0) * 3.0 : 0.0)
+        let sensitivity = -148.0 + Double(12 - sf) * 2.5 + (bw > 125 ? log2(Double(bw) / 125.0) * 3.0 : 0.0)
         let linkBudget = Double(txPower) - sensitivity
 
         // Indoor path loss model with heavy attenuation

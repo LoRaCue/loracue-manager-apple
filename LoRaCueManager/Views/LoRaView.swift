@@ -89,7 +89,7 @@ struct LoRaView: View {
                     HStack {
                         Text("Time on Air:")
                         Spacer()
-                        Text("\(Int(self.viewModel.performance.latency)) ms")
+                        Text("\(self.viewModel.performance.latency) ms")
                             .foregroundColor(.secondary)
                     }
                     HStack {
