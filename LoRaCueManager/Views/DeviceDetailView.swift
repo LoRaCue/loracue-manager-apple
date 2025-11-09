@@ -257,6 +257,7 @@ private struct DetailContent: View {
                     SystemView(service: self.service)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .navigationTitle(self.deviceName)
         #endif

@@ -101,6 +101,15 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
         self.stopScanning()
         self.connectionState = .connecting
         self.centralManager.connect(peripheral, options: nil)
+
+        // Timeout after 5 seconds
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            if self.connectionState == .connecting {
+                Logger.ble.error("⏱️ Connection timeout")
+                self.centralManager.cancelPeripheralConnection(peripheral)
+            }
+        }
     }
 
     func disconnect() {
