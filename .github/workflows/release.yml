@@ -137,6 +137,32 @@ jobs:
         mkdir -p ~/private_keys
         echo "${{ secrets.APPSTORE_PRIVATE_KEY }}" > ~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8
       
+    - name: Setup Developer ID Certificate for DMG Signing
+      run: |
+        # Concatenate certificate parts
+        {
+          echo -n "${{ secrets.DEV_ID_CERT_PART1 }}"
+          echo -n "${{ secrets.DEV_ID_CERT_PART2 }}"
+          echo -n "${{ secrets.DEV_ID_CERT_PART3 }}"
+          echo -n "${{ secrets.DEV_ID_CERT_PART4 }}"
+        } > /tmp/cert_full.txt
+        
+        # Decode certificate
+        base64 --decode -i /tmp/cert_full.txt -o /tmp/developer_id.p12
+        
+        # Create temporary keychain
+        security create-keychain -p actions build.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p actions build.keychain
+        security set-keychain-settings -t 3600 -u build.keychain
+        
+        # Import certificate
+        security import /tmp/developer_id.p12 -k build.keychain -P "${{ secrets.DEV_ID_CERT_PASSWORD }}" -T /usr/bin/codesign -T /usr/bin/productsign
+        security set-key-partition-list -S apple-tool:,apple: -s -k actions build.keychain
+        
+        # Clean up
+        rm /tmp/cert_full.txt /tmp/developer_id.p12
+      
     - name: Build and Archive iOS
       run: |
         xcodebuild archive \
@@ -220,10 +246,18 @@ jobs:
         # Install create-dmg
         brew install create-dmg
         
-        # Create DMG (unsigned for now - will add Developer ID signing later)
+        # Sign the app bundle with Developer ID and hardened runtime
+        codesign --force --deep --sign "Developer ID Application: Fabian Schmieder (898G35U5LW)" \
+          --options runtime \
+          --entitlements LoRaCueManager/LoRaCueManager.entitlements \
+          ./build/LoRaCueManager.app
+        
+        # Verify signature
+        codesign --verify --verbose ./build/LoRaCueManager.app
+        
+        # Create DMG
         create-dmg \
           --volname "LoRaCue Manager" \
-          --volicon "./LoRaCueManager/Assets.xcassets/AppIcon.appiconset/icon_512x512.png" \
           --window-pos 200 120 \
           --window-size 800 400 \
           --icon-size 100 \
@@ -240,6 +274,20 @@ jobs:
             -ov -format UDZO \
             "./LoRaCueManager-macOS-${{ steps.version.outputs.version }}.dmg"
         fi
+        
+        # Sign the DMG
+        codesign --force --sign "Developer ID Application: Fabian Schmieder (898G35U5LW)" \
+          "./LoRaCueManager-macOS-${{ steps.version.outputs.version }}.dmg"
+        
+        # Notarize the DMG
+        xcrun notarytool submit "./LoRaCueManager-macOS-${{ steps.version.outputs.version }}.dmg" \
+          --key ~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8 \
+          --key-id ${{ secrets.APPSTORE_KEY_ID }} \
+          --issuer ${{ secrets.APPSTORE_ISSUER_ID }} \
+          --wait
+        
+        # Staple the notarization ticket
+        xcrun stapler staple "./LoRaCueManager-macOS-${{ steps.version.outputs.version }}.dmg"
       
     - name: Upload macOS to App Store Connect
       run: |
