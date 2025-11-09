@@ -137,6 +137,40 @@ jobs:
         mkdir -p ~/private_keys
         echo "${{ secrets.APPSTORE_PRIVATE_KEY }}" > ~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8
       
+    - name: Download Certificates via App Store Connect API
+      run: |
+        # Install fastlane for certificate management
+        gem install fastlane
+        
+        # Download certificates using App Store Connect API
+        fastlane run download_certs \
+          api_key_path:~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8 \
+          api_key_issuer_id:${{ secrets.APPSTORE_ISSUER_ID }} \
+          api_key_id:${{ secrets.APPSTORE_KEY_ID }} \
+          type:developer_id
+        
+        # Import to keychain
+        security create-keychain -p "${{ secrets.MACOS_CERT_PASSWORD }}" build.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p "${{ secrets.MACOS_CERT_PASSWORD }}" build.keychain
+        security set-keychain-settings -t 3600 -u build.keychain
+        
+        # Import downloaded certificates
+        for cert in ~/Library/MobileDevice/Certificates/*.cer; do
+          security import "$cert" -k build.keychain -T /usr/bin/codesign
+        done
+        
+        security set-key-partition-list -S apple-tool:,apple: -s -k "${{ secrets.MACOS_CERT_PASSWORD }}" build.keychain
+      
+    - name: Download Provisioning Profiles
+      run: |
+        # Download provisioning profiles using App Store Connect API
+        fastlane run download_provisioning_profiles \
+          api_key_path:~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8 \
+          api_key_issuer_id:${{ secrets.APPSTORE_ISSUER_ID }} \
+          api_key_id:${{ secrets.APPSTORE_KEY_ID }} \
+          app_identifier:com.loracue.manager
+      
     - name: Build and Archive iOS
       run: |
         xcodebuild archive \
@@ -144,7 +178,9 @@ jobs:
           -scheme LoRaCueManager \
           -destination "generic/platform=iOS" \
           -archivePath ./build/LoRaCueManager-iOS.xcarchive \
-          CODE_SIGN_STYLE=Automatic \
+          -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8 \
+          -authenticationKeyID ${{ secrets.APPSTORE_KEY_ID }} \
+          -authenticationKeyIssuerID ${{ secrets.APPSTORE_ISSUER_ID }} \
           MARKETING_VERSION=${{ steps.version.outputs.version }} \
           CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build_number }} \
           -allowProvisioningUpdates
@@ -172,8 +208,10 @@ jobs:
           -scheme LoRaCueManager \
           -destination "generic/platform=macOS,variant=Mac Catalyst" \
           -archivePath ./build/LoRaCueManager-macOS-arm64.xcarchive \
+          -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8 \
+          -authenticationKeyID ${{ secrets.APPSTORE_KEY_ID }} \
+          -authenticationKeyIssuerID ${{ secrets.APPSTORE_ISSUER_ID }} \
           ONLY_ACTIVE_ARCH=NO \
-          CODE_SIGN_STYLE=Automatic \
           MARKETING_VERSION=${{ steps.version.outputs.version }} \
           CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build_number }} \
           -allowProvisioningUpdates
@@ -185,8 +223,10 @@ jobs:
           -scheme LoRaCueManager \
           -destination "generic/platform=macOS,variant=Mac Catalyst,arch=x86_64" \
           -archivePath ./build/LoRaCueManager-macOS-x86_64.xcarchive \
+          -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8 \
+          -authenticationKeyID ${{ secrets.APPSTORE_KEY_ID }} \
+          -authenticationKeyIssuerID ${{ secrets.APPSTORE_ISSUER_ID }} \
           ONLY_ACTIVE_ARCH=NO \
-          CODE_SIGN_STYLE=Automatic \
           MARKETING_VERSION=${{ steps.version.outputs.version }} \
           CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build_number }} \
           -allowProvisioningUpdates
@@ -214,6 +254,12 @@ jobs:
         # Install create-dmg
         brew install create-dmg
         
+        # Sign the app bundle with Developer ID for distribution outside App Store
+        codesign --force --deep --sign "Developer ID Application: Fabian Schmieder (898G35U5LW)" \
+          --options runtime \
+          --entitlements LoRaCueManager/LoRaCueManager.entitlements \
+          ./build/LoRaCueManager.app
+        
         # Create DMG
         create-dmg \
           --volname "LoRaCue Manager" \
@@ -234,6 +280,20 @@ jobs:
             -ov -format UDZO \
             "./LoRaCueManager-macOS-${{ steps.version.outputs.version }}.dmg"
         fi
+        
+        # Sign the DMG
+        codesign --force --sign "Developer ID Application: Fabian Schmieder (898G35U5LW)" \
+          "./LoRaCueManager-macOS-${{ steps.version.outputs.version }}.dmg"
+        
+        # Notarize the DMG
+        xcrun notarytool submit "./LoRaCueManager-macOS-${{ steps.version.outputs.version }}.dmg" \
+          --key ~/private_keys/AuthKey_${{ secrets.APPSTORE_KEY_ID }}.p8 \
+          --key-id ${{ secrets.APPSTORE_KEY_ID }} \
+          --issuer ${{ secrets.APPSTORE_ISSUER_ID }} \
+          --wait
+        
+        # Staple the notarization ticket
+        xcrun stapler staple "./LoRaCueManager-macOS-${{ steps.version.outputs.version }}.dmg"
       
     - name: Upload macOS to App Store Connect
       run: |
