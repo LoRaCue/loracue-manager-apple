@@ -16,6 +16,8 @@
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>LoRaCue Manager needs Bluetooth access to discover and connect to LoRaCue devices.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
