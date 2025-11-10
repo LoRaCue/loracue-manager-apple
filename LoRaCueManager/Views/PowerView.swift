@@ -19,7 +19,7 @@ struct PowerView: View {
                         ), in: 1000 ... 300_000, step: 1000)
                             .frame(width: 200)
                         #if os(macOS)
-                            .focusEffectDisabled()
+                            .controlSize(.large)
                         #endif
                     }
                 }
@@ -37,7 +37,7 @@ struct PowerView: View {
                         ), in: 1000 ... 300_000, step: 1000)
                             .frame(width: 200)
                         #if os(macOS)
-                            .focusEffectDisabled()
+                            .controlSize(.large)
                         #endif
                     }
                 }
@@ -55,7 +55,7 @@ struct PowerView: View {
                         ), in: 1000 ... 600_000, step: 1000)
                             .frame(width: 200)
                         #if os(macOS)
-                            .focusEffectDisabled()
+                            .controlSize(.large)
                         #endif
                     }
                 }

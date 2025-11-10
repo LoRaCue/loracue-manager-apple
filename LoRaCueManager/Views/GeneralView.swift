@@ -47,7 +47,7 @@ struct GeneralView: View {
                             set: { self.viewModel.config?.brightness = Int($0) }
                         ), in: 0 ... 255, step: 1)
                         #if os(macOS)
-                            .focusEffectDisabled()
+                            .controlSize(.large)
                         #endif
                     }
 

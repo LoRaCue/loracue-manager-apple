@@ -45,7 +45,7 @@ struct LoRaView: View {
                             ), in: Double(band.minKhz) ... Double(band.maxKhz), step: 100)
                             #if os(macOS)
                                 .frame(width: 200)
-                                .focusEffectDisabled()
+                                .controlSize(.large)
                             #else
                                 .frame(maxWidth: .infinity)
                             #endif
