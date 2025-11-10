@@ -456,14 +456,8 @@ struct DeviceRow: View {
         }
         .padding(12)
         .frame(height: 80)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(self.isSelected ? Color.accentColor.opacity(0.15) : Color.gray.opacity(0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(self.isSelected ? Color.accentColor : Color.gray.opacity(0.2), lineWidth: 1)
-        )
+        .background(Color.gray.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
         .contentShape(Rectangle())
         .onTapGesture {
             if !self.isConnected {
