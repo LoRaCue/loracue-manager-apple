@@ -40,6 +40,7 @@ INFOPLIST_FILE[sdk=iphone*] =
 INFOPLIST_FILE[sdk=appletv*] = 
 GENERATE_INFOPLIST_FILE = YES
 INFOPLIST_KEY_CFBundleDisplayName = LoRaCue Manager
+INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO
 INFOPLIST_KEY_LSMinimumSystemVersion[sdk=macosx*] = 14.0
 INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = LoRaCue Manager needs Bluetooth access to discover and connect to LoRaCue devices.
 INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = LoRaCue Manager needs Bluetooth access to communicate with LoRaCue devices.
