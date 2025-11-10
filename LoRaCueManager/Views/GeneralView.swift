@@ -218,6 +218,7 @@ private struct ModeButton: View {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(self.isSelected ? Color.accentColor : Color.gray.opacity(0.3), lineWidth: 2)
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
