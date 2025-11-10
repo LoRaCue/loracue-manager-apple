@@ -7,7 +7,7 @@ struct LoRaView: View {
     @State private var aesKey = ""
 
     var body: some View {
-        Form {
+        List {
             if let config = viewModel.config {
                 self.presetsSection(config: config)
 

@@ -4,7 +4,7 @@ struct PowerView: View {
     @ObservedObject var viewModel: PowerViewModel
 
     var body: some View {
-        Form {
+        List {
             if let config = viewModel.config {
                 Section("Display Sleep") {
                     Toggle("Enabled", isOn: Binding(
