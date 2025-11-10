@@ -12,7 +12,9 @@ struct PowerView: View {
                         set: { self.viewModel.config?.displaySleepEnabled = $0 }
                     ))
 
-                    LabeledContent("Timeout: \(LoRaCalculator.formatTimeout(config.displaySleepTimeoutMs))") {
+                    HStack {
+                        Text("Timeout: \(LoRaCalculator.formatTimeout(config.displaySleepTimeoutMs))")
+                        Spacer()
                         Slider(value: Binding(
                             get: { Double(config.displaySleepTimeoutMs) },
                             set: { self.viewModel.config?.displaySleepTimeoutMs = Int($0) }
@@ -30,7 +32,9 @@ struct PowerView: View {
                         set: { self.viewModel.config?.lightSleepEnabled = $0 }
                     ))
 
-                    LabeledContent("Timeout: \(LoRaCalculator.formatTimeout(config.lightSleepTimeoutMs))") {
+                    HStack {
+                        Text("Timeout: \(LoRaCalculator.formatTimeout(config.lightSleepTimeoutMs))")
+                        Spacer()
                         Slider(value: Binding(
                             get: { Double(config.lightSleepTimeoutMs) },
                             set: { self.viewModel.config?.lightSleepTimeoutMs = Int($0) }
@@ -48,7 +52,9 @@ struct PowerView: View {
                         set: { self.viewModel.config?.deepSleepEnabled = $0 }
                     ))
 
-                    LabeledContent("Timeout: \(LoRaCalculator.formatTimeout(config.deepSleepTimeoutMs))") {
+                    HStack {
+                        Text("Timeout: \(LoRaCalculator.formatTimeout(config.deepSleepTimeoutMs))")
+                        Spacer()
                         Slider(value: Binding(
                             get: { Double(config.deepSleepTimeoutMs) },
                             set: { self.viewModel.config?.deepSleepTimeoutMs = Int($0) }

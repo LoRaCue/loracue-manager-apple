@@ -32,7 +32,9 @@ struct LoRaView: View {
 
                 Section("Parameters") {
                     if let band = viewModel.bands.first(where: { $0.id == config.bandId }) {
-                        LabeledContent("Frequency: \(Double(config.frequency) / 1000.0, specifier: "%.1f") MHz") {
+                        HStack {
+                            Text("Frequency: \(Double(config.frequency) / 1000.0, specifier: "%.1f") MHz")
+                            Spacer()
                             Slider(value: Binding(
                                 get: {
                                     let rounded = (config.frequency / 100) * 100
