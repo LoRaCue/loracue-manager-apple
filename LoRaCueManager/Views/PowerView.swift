@@ -18,6 +18,9 @@ struct PowerView: View {
                             set: { self.viewModel.config?.displaySleepTimeoutMs = Int($0) }
                         ), in: 1000 ... 300_000, step: 1000)
                             .frame(width: 200)
+                        #if os(macOS)
+                            .focusEffectDisabled()
+                        #endif
                     }
                 }
 
@@ -33,6 +36,9 @@ struct PowerView: View {
                             set: { self.viewModel.config?.lightSleepTimeoutMs = Int($0) }
                         ), in: 1000 ... 300_000, step: 1000)
                             .frame(width: 200)
+                        #if os(macOS)
+                            .focusEffectDisabled()
+                        #endif
                     }
                 }
 
@@ -48,6 +54,9 @@ struct PowerView: View {
                             set: { self.viewModel.config?.deepSleepTimeoutMs = Int($0) }
                         ), in: 1000 ... 600_000, step: 1000)
                             .frame(width: 200)
+                        #if os(macOS)
+                            .focusEffectDisabled()
+                        #endif
                     }
                 }
             } else {
