@@ -62,6 +62,7 @@ struct PowerView: View {
                     Task { await self.viewModel.save() }
                 }
                 .disabled(self.viewModel.isLoading)
+                .frame(minWidth: 60)
             }
         }
         .task {
