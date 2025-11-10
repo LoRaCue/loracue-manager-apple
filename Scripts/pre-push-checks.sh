@@ -2,6 +2,14 @@
 
 echo "Running pre-push checks..."
 
+# Run SwiftLint in strict mode
+echo "→ Running SwiftLint (strict)..."
+swiftlint lint --strict --quiet
+if [ $? -ne 0 ]; then
+    echo "❌ SwiftLint failed with warnings. Fix all warnings before pushing."
+    exit 1
+fi
+
 # Build for macOS
 echo "→ Building for macOS..."
 xcodebuild build \
