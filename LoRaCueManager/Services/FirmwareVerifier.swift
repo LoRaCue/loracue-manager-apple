@@ -34,12 +34,10 @@ class FirmwareVerifier {
 
     // MARK: - RSA Signature Verification
 
-    /// Verify binary file signature (signs SHA256 hash)
+    /// Verify binary file signature (signs raw file data)
     func verifyBinarySignature(fileUrl: URL, signatureUrl: URL) -> VerificationResult {
         do {
             let fileData = try Data(contentsOf: fileUrl)
-            let hash = SHA256.hash(data: fileData)
-            let hashData = Data(hash)
 
             let signatureString = try String(contentsOf: signatureUrl, encoding: .utf8)
                 .trimmingCharacters(in: .whitespacesAndNewlines)

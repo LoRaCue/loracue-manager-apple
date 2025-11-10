@@ -21,25 +21,28 @@ struct FirmwareUpgradeView: View {
                 #if os(iOS)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
-                        self.sourceCard(
+                        FirmwareSourceCard(
                             icon: "arrow.down.circle.fill",
                             title: "Release",
                             subtitle: "GitHub release",
-                            tag: 0
+                            tag: 0,
+                            selectedTab: self.$selectedTab
                         )
 
-                        self.sourceCard(
+                        FirmwareSourceCard(
                             icon: "archivebox.fill",
                             title: "ZIP",
                             subtitle: "Firmware archive file",
-                            tag: 1
+                            tag: 1,
+                            selectedTab: self.$selectedTab
                         )
 
-                        self.sourceCard(
+                        FirmwareSourceCard(
                             icon: "doc.fill",
                             title: "BIN",
                             subtitle: "Firmware binary file",
-                            tag: 2
+                            tag: 2,
+                            selectedTab: self.$selectedTab
                         )
                     }
                     .padding(.horizontal, 4)
@@ -48,25 +51,28 @@ struct FirmwareUpgradeView: View {
                 .frame(height: 80)
                 #else
                 HStack(spacing: 12) {
-                    self.sourceCard(
+                    FirmwareSourceCard(
                         icon: "arrow.down.circle.fill",
                         title: "Release",
                         subtitle: "GitHub release",
-                        tag: 0
+                        tag: 0,
+                        selectedTab: self.$selectedTab
                     )
 
-                    self.sourceCard(
+                    FirmwareSourceCard(
                         icon: "archivebox.fill",
                         title: "ZIP",
                         subtitle: "Firmware archive file",
-                        tag: 1
+                        tag: 1,
+                        selectedTab: self.$selectedTab
                     )
 
-                    self.sourceCard(
+                    FirmwareSourceCard(
                         icon: "doc.fill",
                         title: "BIN",
                         subtitle: "Firmware binary file",
-                        tag: 2
+                        tag: 2,
+                        selectedTab: self.$selectedTab
                     )
                 }
                 .frame(height: 80)
@@ -140,41 +146,6 @@ struct FirmwareUpgradeView: View {
     // MARK: - Source Card
 
     @ViewBuilder
-    private func sourceCard(icon: String, title: String, subtitle: String, tag: Int) -> some View {
-        Button {
-            self.selectedTab = tag
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 28))
-                    .foregroundColor(self.selectedTab == tag ? .accentColor : .secondary)
-                    .frame(width: 40)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.headline)
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                Spacer()
-            }
-            .padding(12)
-            #if os(iOS)
-                .frame(width: 200)
-            #else
-                .frame(maxWidth: .infinity)
-            #endif
-                .background(self.selectedTab == tag ? Color.accentColor.opacity(0.1) : Color.gray.opacity(0.05))
-                .cornerRadius(8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(self.selectedTab == tag ? Color.accentColor : Color.clear, lineWidth: 2)
-                )
-        }
-        .buttonStyle(.plain)
-    }
 
     // MARK: - GitHub Sections
 
