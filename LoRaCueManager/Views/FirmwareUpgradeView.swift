@@ -143,143 +143,39 @@ struct FirmwareUpgradeView: View {
         }
     }
 
-    // MARK: - Source Card
-
-    @ViewBuilder
-
     // MARK: - GitHub Sections
 
     @ViewBuilder
     private var githubSections: some View {
-        Section {
-            if self.viewModel.isLoading {
-                ProgressView()
-            } else if self.viewModel.releases.isEmpty {
-                Text("No releases found")
-                    .foregroundColor(.secondary)
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(self.viewModel.releases) { release in
-                        Button {
-                            Task { await self.viewModel.selectRelease(release) }
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "arrow.down.circle.fill")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.blue)
-                                    .frame(width: 32)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(release.name)
-                                        .font(.headline)
-                                    Text(release.tagName)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-
-                                Spacer()
-
-                                if release.prerelease {
-                                    Text("PRE")
-                                        .font(.caption)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.orange.opacity(0.2))
-                                        .cornerRadius(4)
-                                }
-                            }
-                            .padding(12)
-                            .background(Color.gray.opacity(0.05))
-                            .cornerRadius(8)
-                        }
-                        .buttonStyle(.plain)
-                    }
+        GitHubSection(
+            releases: self.viewModel.releases,
+            manifests: self.viewModel.manifests,
+            isLoading: self.viewModel.isLoading,
+            onSelectRelease: { await self.viewModel.selectRelease($0) },
+            onSelectManifest: { manifest in
+                self.viewModel.selectedManifest = manifest
+                self.pendingUpgradeAction = {
+                    Task { await self.viewModel.upgradeFromGitHub() }
                 }
+                self.showUpgradeConfirmation = true
             }
-        }
-
-        if !self.viewModel.manifests.isEmpty {
-            Section {
-                VStack(spacing: 8) {
-                    ForEach(self.viewModel.manifests, id: \.model) { manifest in
-                        Button {
-                            self.viewModel.selectedManifest = manifest
-                            self.pendingUpgradeAction = {
-                                Task { await self.viewModel.upgradeFromGitHub() }
-                            }
-                            self.showUpgradeConfirmation = true
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "cpu.fill")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.green)
-                                    .frame(width: 32)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(manifest.model)
-                                        .font(.headline)
-                                    Text("\(manifest.boardName) • \(manifest.version)")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-
-                                Spacer()
-                            }
-                            .padding(12)
-                            .background(Color.gray.opacity(0.05))
-                            .cornerRadius(8)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
+        )
     }
 
     // MARK: - ZIP Sections
 
     @ViewBuilder
     private var zipSections: some View {
-        Section("Firmware File") {
-            Label {
-                Text("ZIP files must contain manifest.json with firmware metadata and signature.")
-                    .font(.caption)
-            } icon: {
-                Image(systemName: "info.circle")
-                    .foregroundColor(.blue)
-            }
-
-            if let url = viewModel.selectedZipUrl {
-                LabeledContent {
-                    HStack {
-                        Button("Change") {
-                            self.showZipPicker = true
-                        }
-
-                        Button("Start Upgrade", role: .destructive) {
-                            self.pendingUpgradeAction = {
-                                Task { await self.viewModel.upgradeFromZip() }
-                            }
-                            self.showUpgradeConfirmation = true
-                        }
-                    }
-                } label: {
-                    VStack(alignment: .leading) {
-                        Text(url.lastPathComponent)
-                            .font(.headline)
-                        if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize {
-                            Text("\(size / 1024) KB")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
+        ZIPSection(
+            selectedURL: self.viewModel.selectedZipUrl,
+            showPicker: self.$showZipPicker,
+            onUpgrade: {
+                self.pendingUpgradeAction = {
+                    Task { await self.viewModel.upgradeFromZip() }
                 }
-            } else {
-                Button("Select ZIP file...") {
-                    self.showZipPicker = true
-                }
+                self.showUpgradeConfirmation = true
             }
-        }
+        )
         .fileImporter(
             isPresented: self.$showZipPicker,
             allowedContentTypes: [UTType(filenameExtension: "zip")!]
@@ -294,55 +190,16 @@ struct FirmwareUpgradeView: View {
 
     @ViewBuilder
     private var binSections: some View {
-        Section("Firmware File") {
-            Label {
-                Text("Advanced Users Only")
-                    .font(.headline)
-            } icon: {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(.orange)
-            }
-
-            Text(
-                """
-                Raw .bin files bypass all security checks. This could brick your device if the \
-                firmware is incompatible or corrupted.
-                """
-            )
-            .font(.caption)
-            .foregroundColor(.secondary)
-
-            if let url = viewModel.selectedBinUrl {
-                LabeledContent {
-                    HStack {
-                        Button("Change") {
-                            self.showBinPicker = true
-                        }
-
-                        Button("Start Upgrade", role: .destructive) {
-                            self.pendingUpgradeAction = {
-                                Task { await self.viewModel.upgradeFromBin() }
-                            }
-                            self.showBinWarning = true
-                        }
-                    }
-                } label: {
-                    VStack(alignment: .leading) {
-                        Text(url.lastPathComponent)
-                            .font(.headline)
-                        if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize {
-                            Text("\(size / 1024) KB")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
+        BINSection(
+            selectedURL: self.viewModel.selectedBinUrl,
+            showPicker: self.$showBinPicker,
+            onUpgrade: {
+                self.pendingUpgradeAction = {
+                    Task { await self.viewModel.upgradeFromBin() }
                 }
-            } else {
-                Button("Select binary file...") {
-                    self.showBinPicker = true
-                }
+                self.showBinWarning = true
             }
-        }
+        )
         .fileImporter(
             isPresented: self.$showBinPicker,
             allowedContentTypes: [UTType(filenameExtension: "bin")!]

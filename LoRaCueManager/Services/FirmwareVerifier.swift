@@ -34,10 +34,11 @@ class FirmwareVerifier {
 
     // MARK: - RSA Signature Verification
 
-    /// Verify binary file signature (signs raw file data)
+    /// Verify binary file signature (signs SHA256 hash)
     func verifyBinarySignature(fileUrl: URL, signatureUrl: URL) -> VerificationResult {
         do {
             let fileData = try Data(contentsOf: fileUrl)
+            let hashData = SHA256.hash(data: fileData)
 
             let signatureString = try String(contentsOf: signatureUrl, encoding: .utf8)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -46,7 +47,7 @@ class FirmwareVerifier {
             }
 
             let publicKey = try parsePublicKey(Self.publicKeyPEM)
-            let isValid = try verifyRSASignature(data: hashData, signature: signatureData, publicKey: publicKey)
+            let isValid = try verifyRSASignature(data: Data(hashData), signature: signatureData, publicKey: publicKey)
             return isValid ? .success : .signatureInvalid
         } catch {
             return .error(error)
