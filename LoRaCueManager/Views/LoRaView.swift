@@ -28,6 +28,9 @@ struct LoRaView: View {
                             Text(band.name).tag(band.id)
                         }
                     }
+                    #if os(macOS)
+                    .controlSize(.large)
+                    #endif
                 }
 
                 Section("Parameters") {
@@ -54,10 +57,17 @@ struct LoRaView: View {
                         }
                     }
 
-                    Stepper("Spreading Factor: \(config.spreadingFactor)", value: Binding(
-                        get: { config.spreadingFactor },
-                        set: { self.viewModel.config?.spreadingFactor = $0 }
-                    ), in: 7 ... 12)
+                    HStack {
+                        Text("Spreading Factor")
+                        Spacer()
+                        Stepper("\(config.spreadingFactor)", value: Binding(
+                            get: { config.spreadingFactor },
+                            set: { self.viewModel.config?.spreadingFactor = $0 }
+                        ), in: 7 ... 12)
+                        #if os(macOS)
+                            .controlSize(.large)
+                        #endif
+                    }
 
                     Picker("Bandwidth", selection: Binding(
                         get: { config.bandwidth },
@@ -67,6 +77,9 @@ struct LoRaView: View {
                         Text("250 kHz").tag(250)
                         Text("500 kHz").tag(500)
                     }
+                    #if os(macOS)
+                    .controlSize(.large)
+                    #endif
 
                     Picker("Coding Rate", selection: Binding(
                         get: { config.codingRate },
@@ -77,22 +90,26 @@ struct LoRaView: View {
                         Text("4/7").tag(7)
                         Text("4/8").tag(8)
                     }
+                    #if os(macOS)
+                    .controlSize(.large)
+                    #endif
 
                     HStack {
+                        Text("TX Power")
+                        Spacer()
                         if let band = viewModel.bands.first(where: { $0.id == config.bandId }),
                            config.txPower > band.maxPowerDbm
                         {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.yellow)
                         }
-                        HStack {
-                            Text("TX Power")
-                            Spacer()
-                            Stepper("\(config.txPower) dBm", value: Binding(
-                                get: { config.txPower },
-                                set: { self.viewModel.config?.txPower = $0 }
-                            ), in: 2 ... 20)
-                        }
+                        Stepper("\(config.txPower) dBm", value: Binding(
+                            get: { config.txPower },
+                            set: { self.viewModel.config?.txPower = $0 }
+                        ), in: 2 ... 20)
+                        #if os(macOS)
+                            .controlSize(.large)
+                        #endif
                     }
                 }
 

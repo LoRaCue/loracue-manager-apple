@@ -7,81 +7,103 @@ struct GeneralView: View {
     @State private var showBluetoothWarning = false
 
     var body: some View {
-        Form {
-            if let config = viewModel.config {
-                Section("Device Name") {
-                    TextField("Enter device name", text: Binding(
-                        get: { config.name },
-                        set: { self.viewModel.config?.name = $0 }
-                    ))
-                    .textFieldStyle(.roundedBorder)
-                }
-
-                Section("Operation Mode") {
-                    HStack(spacing: 16) {
-                        ModeButton(
-                            title: "Presenter",
-                            description: "Send commands",
-                            isSelected: config.mode == "PRESENTER",
-                            action: { self.viewModel.config?.mode = "PRESENTER" }
-                        )
-                        ModeButton(
-                            title: "PC Receiver",
-                            description: "Receive commands",
-                            isSelected: config.mode == "PC",
-                            action: { self.viewModel.config?.mode = "PC" }
-                        )
+        VStack(spacing: 0) {
+            Form {
+                if let config = viewModel.config {
+                    Section("Device Name") {
+                        TextField("Enter device name", text: Binding(
+                            get: { config.name },
+                            set: { self.viewModel.config?.name = $0 }
+                        ))
+                        .textFieldStyle(.roundedBorder)
                     }
-                }
 
-                Section("Display Brightness") {
-                    HStack {
-                        Text("\(config.brightness)")
-                        Spacer()
-                        Slider(value: Binding(
-                            get: { Double(config.brightness) },
-                            set: { self.viewModel.config?.brightness = Int($0) }
-                        ), in: 0 ... 255, step: 1)
-                        #if os(macOS)
-                            .controlSize(.large)
-                        #endif
-                    }
-                }
-
-                Section {
-                    HStack {
-                        Text("Slot ID\n(Multi-PC Routing)")
-                        Spacer()
-                        Picker("", selection: Binding(
-                            get: { config.slotId },
-                            set: { self.viewModel.config?.slotId = $0 }
-                        )) {
-                            ForEach(1 ... 16, id: \.self) { slot in
-                                Text("Slot \(slot)").tag(slot)
-                            }
+                    Section("Operation Mode") {
+                        HStack(spacing: 16) {
+                            ModeButton(
+                                title: "Presenter",
+                                description: "Send commands",
+                                isSelected: config.mode == "PRESENTER",
+                                action: { self.viewModel.config?.mode = "PRESENTER" }
+                            )
+                            ModeButton(
+                                title: "PC Receiver",
+                                description: "Receive commands",
+                                isSelected: config.mode == "PC",
+                                action: { self.viewModel.config?.mode = "PC" }
+                            )
                         }
-                        .labelsHidden()
                     }
-                } footer: {
-                    Text("Select which PC is controlled or events are received for")
-                }
 
-                Section {
-                    Toggle("Bluetooth", isOn: Binding(
-                        get: { config.bluetooth },
-                        set: { newValue in
-                            if !newValue, self.viewModel.service.bleManager.connectedPeripheral != nil {
-                                self.showBluetoothWarning = true
-                            } else {
-                                self.viewModel.config?.bluetooth = newValue
-                            }
+                    Section("Display Brightness") {
+                        HStack {
+                            Text("\(config.brightness)")
+                            Spacer()
+                            Slider(value: Binding(
+                                get: { Double(config.brightness) },
+                                set: { self.viewModel.config?.brightness = Int($0) }
+                            ), in: 0 ... 255, step: 1)
+                            #if os(macOS)
+                                .controlSize(.large)
+                            #endif
                         }
-                    ))
-                } footer: {
-                    Text("Enable Bluetooth for wireless configuration")
-                }
+                    }
 
-                Section {
+                    Section {
+                        HStack {
+                            Text("Slot ID\n(Multi-PC Routing)")
+                            Spacer()
+                            Picker("", selection: Binding(
+                                get: { config.slotId },
+                                set: { self.viewModel.config?.slotId = $0 }
+                            )) {
+                                ForEach(1 ... 16, id: \.self) { slot in
+                                    Text("Slot \(slot)").tag(slot)
+                                }
+                            }
+                            .labelsHidden()
+                        }
+                    } footer: {
+                        Text("Select which PC is controlled or events are received for")
+                    }
+
+                    Section {
+                        Toggle("Bluetooth", isOn: Binding(
+                            get: { config.bluetooth },
+                            set: { newValue in
+                                if !newValue, self.viewModel.service.bleManager.connectedPeripheral != nil {
+                                    self.showBluetoothWarning = true
+                                } else {
+                                    self.viewModel.config?.bluetooth = newValue
+                                }
+                            }
+                        ))
+                    } footer: {
+                        Text("Enable Bluetooth for wireless configuration")
+                    }
+
+                } else if self.viewModel.error != nil {
+                    ContentUnavailableView(
+                        "Failed to Load",
+                        systemImage: "exclamationmark.triangle",
+                        description: Text(self.viewModel.error ?? "Unknown error")
+                    )
+                } else {
+                    HStack {
+                        Spacer()
+                        ProgressView("Loading...")
+                        Spacer()
+                    }
+                }
+            }
+            .formStyle(.grouped)
+
+            if self.viewModel.config != nil {
+                VStack {
+                    Divider()
+                        .padding(.top, 32)
+                        .padding(.bottom, 32)
+
                     Button(role: .destructive) {
                         self.showResetConfirmation = true
                     } label: {
@@ -89,24 +111,23 @@ struct GeneralView: View {
                             Image(systemName: "exclamationmark.triangle")
                             Text("Factory Reset")
                         }
+                        .font(.system(size: 24))
+                        .foregroundColor(Color(red: 0.6, green: 0, blue: 0))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 62)
                     }
+                    .buttonStyle(.bordered)
+                    .tint(.gray)
+                    #if os(macOS)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color(red: 0.6, green: 0, blue: 0), lineWidth: 1)
+                        )
+                    #endif
                 }
-
-            } else if self.viewModel.error != nil {
-                ContentUnavailableView(
-                    "Failed to Load",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(self.viewModel.error ?? "Unknown error")
-                )
-            } else {
-                HStack {
-                    Spacer()
-                    ProgressView("Loading...")
-                    Spacer()
-                }
+                .padding(.horizontal, 20)
             }
         }
-        .formStyle(.grouped)
         .navigationTitle("General Settings")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
