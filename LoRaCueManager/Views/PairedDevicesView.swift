@@ -12,7 +12,7 @@ struct PairedDevicesView: View {
     }
 
     var body: some View {
-        List {
+        Form {
             if self.viewModel.devices.isEmpty {
                 ContentUnavailableView(
                     "No Paired Devices",

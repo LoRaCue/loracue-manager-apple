@@ -85,10 +85,14 @@ struct LoRaView: View {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.yellow)
                         }
-                        Stepper("TX Power: \(config.txPower) dBm", value: Binding(
-                            get: { config.txPower },
-                            set: { self.viewModel.config?.txPower = $0 }
-                        ), in: 2 ... 20)
+                        HStack {
+                            Text("TX Power")
+                            Spacer()
+                            Stepper("\(config.txPower) dBm", value: Binding(
+                                get: { config.txPower },
+                                set: { self.viewModel.config?.txPower = $0 }
+                            ), in: 2 ... 20)
+                        }
                     }
                 }
 
