@@ -4,18 +4,7 @@ import Foundation
 class FirmwareVerifier {
     private static let publicKeyPEM = """
     -----BEGIN PUBLIC KEY-----
-    MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAtTdjvDKnLv8DNjQ+xqQ4
-    Vq7fArurL3ISRHnYfALeeS4tPF8GO2yP36tc/RCe0UkG1IN9LZNmEKOFdDn3W6Cm
-    wJR2W/JpERdozsel2yJvVKkePapFepbfDd2LiwmUBM68QH/2tjCxAWICHFu+TVvm
-    Hvow6UC8n6v43ALczajE6TFaTqRQCY5dBeJi5bMyuYz1NtMz3qj9rjHkDED/jcyX
-    P797mjWbVgGbvZPc56MYrB7BgkOalt5k+0dAxavFUS9xVJfhmpXligCCVMCzc9/X
-    vyFjUidSYMQNbiqGlgbh3GtPp58Zd9Ynv/4l6s/W2fsqhSdYyI1iTQwWdzvzrJzd
-    1ST7VnyFgFOYGL1h0LOlVfccv6WO6cR/5o00G3xFA5fjUatAj29UJ+YndhVBhf5h
-    ZQ0eB/KocNRh19tLUcVdmzNRSFQSCOYpIt+b6tB9oh4SzWfzXVQdBKPAHTdB5WWh
-    AHBd7cNhSIlBHgahA1ZD1FY012JJTx0ZxG+17rrdZY/R+aOoGgec0PkpUqg70Rnu
-    TXAUd55S0bJouFQUFUOqd4Bx6PjPXE08eg5mHal0pPJ5T5+3IkyF9lIuSZBysL3e
-    UVbB/uWy6+ZQzj1tL4fVMxiHBzN9Jy6kUQJr0V80CKpnbRzkTZ94qiiVu2v0z9CL
-    QfgIqpuSnXdpOyMI9FggbT0CAwEAAQ==
+    MCowBQYDK2VwAyEAo8F7VxGLhVKZqBxCQvJ5xKp0YvLqH8vN2wZ3jR4mTkI=
     -----END PUBLIC KEY-----
     """
 
@@ -32,22 +21,29 @@ class FirmwareVerifier {
         }
     }
 
-    // MARK: - RSA Signature Verification
+    // MARK: - Ed25519 Signature Verification
 
     /// Verify binary file signature (signs SHA256 hash)
     func verifyBinarySignature(fileUrl: URL, signatureUrl: URL) -> VerificationResult {
         do {
             let fileData = try Data(contentsOf: fileUrl)
             let hashData = SHA256.hash(data: fileData)
+            let hashDataBytes = Data(hashData)
 
             let signatureString = try String(contentsOf: signatureUrl, encoding: .utf8)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let signatureData = Data(base64Encoded: signatureString) else {
+
+            // Binary signatures are now Hex-encoded
+            guard let signatureData = Data(hexString: signatureString) else {
                 return .signatureInvalid
             }
 
-            let publicKey = try parsePublicKey(Self.publicKeyPEM)
-            let isValid = try verifyRSASignature(data: Data(hashData), signature: signatureData, publicKey: publicKey)
+            let publicKey = try parseEd25519PublicKey(Self.publicKeyPEM)
+            let isValid = try verifyEd25519Signature(
+                data: hashDataBytes,
+                signature: signatureData,
+                publicKey: publicKey
+            )
             return isValid ? .success : .signatureInvalid
         } catch {
             return .error(error)
@@ -61,12 +57,18 @@ class FirmwareVerifier {
 
             let signatureString = try String(contentsOf: signatureUrl, encoding: .utf8)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            // JSON signatures remain Base64-encoded
             guard let signatureData = Data(base64Encoded: signatureString) else {
                 return .signatureInvalid
             }
 
-            let publicKey = try parsePublicKey(Self.publicKeyPEM)
-            let isValid = try verifyRSASignature(data: jsonData, signature: signatureData, publicKey: publicKey)
+            let publicKey = try parseEd25519PublicKey(Self.publicKeyPEM)
+            let isValid = try verifyEd25519Signature(
+                data: jsonData,
+                signature: signatureData,
+                publicKey: publicKey
+            )
             return isValid ? .success : .signatureInvalid
         } catch {
             return .error(error)
@@ -75,7 +77,7 @@ class FirmwareVerifier {
 
     // MARK: - Private Helpers
 
-    private func parsePublicKey(_ pem: String) throws -> SecKey {
+    private func parseEd25519PublicKey(_ pem: String) throws -> Curve25519.Signing.PublicKey {
         let pemStripped = pem
             .replacingOccurrences(of: "-----BEGIN PUBLIC KEY-----", with: "")
             .replacingOccurrences(of: "-----END PUBLIC KEY-----", with: "")
@@ -86,35 +88,56 @@ class FirmwareVerifier {
             throw VerificationError.invalidPublicKey
         }
 
-        let attributes: [String: Any] = [
-            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
-            kSecAttrKeyClass as String: kSecAttrKeyClassPublic,
-            kSecAttrKeySizeInBits as String: 4096
-        ]
+        // Ed25519 keys in PEM format (SubjectPublicKeyInfo) are wrapped.
+        // The raw key is the last 32 bytes.
+        // OID for Ed25519 is 1.3.101.112
+        // Sequence: 30 2a
+        //   AlgorithmIdentifier: 30 05 06 03 2b 65 70
+        //   BitString: 03 21 00 [32 bytes of key]
+        // Total length is 44 bytes.
 
-        var error: Unmanaged<CFError>?
-        guard let key = SecKeyCreateWithData(keyData as CFData, attributes as CFDictionary, &error) else {
-            throw error?.takeRetainedValue() ?? VerificationError.invalidPublicKey
+        // Simple heuristic: if it's 32 bytes, use it directly.
+        // If it's longer (likely 44 bytes for full DER), extract the last 32 bytes.
+
+        let rawKeyData: Data
+        if keyData.count == 32 {
+            rawKeyData = keyData
+        } else if keyData.count > 32 {
+            rawKeyData = keyData.suffix(32)
+        } else {
+            throw VerificationError.invalidPublicKey
         }
 
-        return key
+        return try Curve25519.Signing.PublicKey(rawRepresentation: rawKeyData)
     }
 
-    private func verifyRSASignature(data: Data, signature: Data, publicKey: SecKey) throws -> Bool {
-        var error: Unmanaged<CFError>?
-        let result = SecKeyVerifySignature(
-            publicKey,
-            .rsaSignatureMessagePKCS1v15SHA256,
-            data as CFData,
-            signature as CFData,
-            &error
-        )
+    private func verifyEd25519Signature(
+        data: Data,
+        signature: Data,
+        publicKey: Curve25519.Signing.PublicKey
+    ) throws -> Bool {
+        publicKey.isValidSignature(signature, for: data)
+    }
+}
 
-        if let error {
-            throw error.takeRetainedValue()
+// MARK: - Extensions
+
+extension Data {
+    fileprivate init?(hexString: String) {
+        let length = hexString.count / 2
+        var data = Data(capacity: length)
+        var currentIndex = hexString.startIndex
+        for _ in 0 ..< length {
+            let nextIndex = hexString.index(currentIndex, offsetBy: 2)
+            let bytes = hexString[currentIndex ..< nextIndex]
+            if let num = UInt8(bytes, radix: 16) {
+                data.append(num)
+            } else {
+                return nil
+            }
+            currentIndex = nextIndex
         }
-
-        return result
+        self = data
     }
 }
 
