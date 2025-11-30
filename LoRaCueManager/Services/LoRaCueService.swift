@@ -88,10 +88,12 @@ class LoRaCueService: ObservableObject {
 
             if isRetryable, retryCount < maxRetries {
                 let delay = UInt64(pow(2.0, Double(retryCount)) * 100_000_000) // 100ms, 200ms
-                self.logger
-                    .warning(
-                        "⚠️ Retrying \(method.rawValue) (attempt \(retryCount + 1)/\(maxRetries)) after \(delay / 1_000_000)ms"
-                    )
+                self.logger.warning(
+                    """
+                    ⚠️ Retrying \(method.rawValue) (attempt \(retryCount + 1)/\(maxRetries)) \
+                    after \(delay / 1_000_000)ms
+                    """
+                )
                 try await Task.sleep(nanoseconds: delay)
                 return try await self.sendRequest(method: method, params: params, retryCount: retryCount + 1)
             }

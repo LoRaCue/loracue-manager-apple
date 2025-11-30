@@ -40,3 +40,9 @@ enum AppError: LocalizedError {
         }
     }
 }
+
+enum BLEError: Error {
+    case notConnected
+    case timeout
+    case invalidResponse
+}
