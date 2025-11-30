@@ -1,15 +1,44 @@
 import Foundation
 
 enum LoRaCalculator {
+    private enum Constants {
+        // Time on Air Constants
+        static let preambleSymbols = 8.0
+        static let syncWordSymbols = 4.25
+        static let payloadLength = 20.0 // Assumed payload length in bytes
+        static let headerOverhead = 28.0
+        static let crcOverhead = 16.0
+
+        // Sensitivity Constants
+        static let sensitivityBase = -148.0
+        static let sensitivitySlope = 2.5
+        static let bwReference = 125.0
+        static let bwSlope = 3.0
+
+        // Path Loss Constants
+        static let fadeMargin = 20.0
+        static let pathLossExponent = 3.5
+        static let referenceDistance = 1.0
+        static let referenceLoss = 50.0
+    }
+
     /// Calculate Time on Air (latency in ms) and Range (in meters) based on LoRa parameters
     static func calculatePerformance(sf: Int, bw: Int, cr: Int, txPower: Int) -> (latency: Int, range: Int) {
         // Time on Air calculation (bw is in kHz, convert to Hz)
         let bwHz = Double(bw) * 1000.0
         let symbolDuration = Double(1 << sf) / bwHz * 1000.0
-        let preambleTime = (8.0 + 4.25) * symbolDuration
+        let preambleTime = (Constants.preambleSymbols + Constants.syncWordSymbols) * symbolDuration
+
+        // Payload symbol calculation:
+        // (8 * payload + 28 + 16 - 4 * SF) / (4 * SF)
+        // Simplified from LoRa datasheet formula
+        let payloadBits = 8.0 * Constants.payloadLength
+        let overhead = Constants.headerOverhead + Constants.crcOverhead
+        let dividend = payloadBits - 4.0 * Double(sf) + overhead
+        let divisor = 4.0 * Double(sf)
 
         let payloadSymbols = 8.0 + max(
-            ceil((8.0 * 20.0 - 4.0 * Double(sf) + 28.0 + 16.0) / (4.0 * Double(sf))) * Double(cr),
+            ceil(dividend / divisor) * Double(cr),
             0.0
         )
         let payloadTime = payloadSymbols * symbolDuration
@@ -18,19 +47,15 @@ enum LoRaCalculator {
 
         // Range calculation (indoor path loss model matching WebUI)
         // SX1262 sensitivity: -148 dBm @ SF12/BW125, improves ~2.5dB per SF step down
-        let sensitivity = -148.0 + Double(12 - sf) * 2.5 + (bw > 125 ? log2(Double(bw) / 125.0) * 3.0 : 0.0)
+        let sensitivity = Constants.sensitivityBase + Double(12 - sf) * Constants.sensitivitySlope +
+            (bw > Int(Constants.bwReference) ? log2(Double(bw) / Constants.bwReference) * Constants.bwSlope : 0.0)
         let linkBudget = Double(txPower) - sensitivity
 
         // Indoor path loss model with heavy attenuation
-        let fadeMargin = 20.0 // dB - conservative for reliability
-        let pathLossExponent = 3.5 // Heavy indoor attenuation (concrete walls, multiple floors)
-        let referenceDistance = 1.0 // meters
-        let referenceLoss = 50.0 // dB at 1m (realistic for indoor 868 MHz)
-
         // Solve for distance: d = d0 * 10^((linkBudget - fadeMargin - PL0) / (10*n))
-        let range = Int(referenceDistance * pow(
+        let range = Int(Constants.referenceDistance * pow(
             10.0,
-            (linkBudget - fadeMargin - referenceLoss) / (10.0 * pathLossExponent)
+            (linkBudget - Constants.fadeMargin - Constants.referenceLoss) / (10.0 * Constants.pathLossExponent)
         ))
 
         return (latency: timeOnAir, range: range)
