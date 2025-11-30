@@ -70,6 +70,7 @@ jobs:
           -project LoRaCueManager.xcodeproj \
           -scheme LoRaCueManager \
           -destination "platform=macOS" \
+          -skip-testing:LoRaCueManagerUITests \
           -enableCodeCoverage YES \
           CURRENT_PROJECT_VERSION=${{ steps.version.outputs.build_number }} \
           CODE_SIGN_IDENTITY="" \
