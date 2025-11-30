@@ -41,9 +41,16 @@ struct DeviceInfo: Codable {
 
 // MARK: - General Config
 
+enum DeviceMode: String, Codable, CaseIterable, Identifiable {
+    case presenter = "PRESENTER"
+    case pc = "PC"
+
+    var id: String { self.rawValue }
+}
+
 struct GeneralConfig: Codable, Equatable {
     var name: String
-    var mode: String
+    var mode: DeviceMode
     var brightness: Int
     var bluetooth: Bool
     var slotId: Int

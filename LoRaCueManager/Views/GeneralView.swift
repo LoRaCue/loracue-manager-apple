@@ -23,14 +23,14 @@ struct GeneralView: View {
                             ModeButton(
                                 title: "Presenter",
                                 description: "Send commands",
-                                isSelected: config.mode == "PRESENTER",
-                                action: { self.viewModel.config?.mode = "PRESENTER" }
+                                isSelected: config.mode == .presenter,
+                                action: { self.viewModel.config?.mode = .presenter }
                             )
                             ModeButton(
                                 title: "PC Receiver",
                                 description: "Receive commands",
-                                isSelected: config.mode == "PC",
-                                action: { self.viewModel.config?.mode = "PC" }
+                                isSelected: config.mode == .pc,
+                                action: { self.viewModel.config?.mode = .pc }
                             )
                         }
                     }
