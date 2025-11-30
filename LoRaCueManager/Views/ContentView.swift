@@ -4,6 +4,12 @@ import SwiftUI
 struct ContentView: View {
     let service: LoRaCueService
 
+    private enum Constants {
+        static let sidebarMinWidth: CGFloat = 220
+        static let sidebarIdealWidth: CGFloat = 250
+        static let sidebarMaxWidth: CGFloat = 400
+    }
+
     var body: some View {
         Logger.ui.info(
             """
@@ -14,7 +20,11 @@ struct ContentView: View {
         #if os(macOS)
         return NavigationSplitView {
             DeviceListView(service: self.service)
-                .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 400)
+                .navigationSplitViewColumnWidth(
+                    min: Constants.sidebarMinWidth,
+                    ideal: Constants.sidebarIdealWidth,
+                    max: Constants.sidebarMaxWidth
+                )
         } detail: {
             DeviceDetailView(service: self.service)
         }
