@@ -11,16 +11,6 @@ struct DeviceAdvertisementData {
 ///
 /// `BLEManager` handles device discovery, connection management, and data communication
 /// using the Nordic UART Service (NUS) protocol.
-///
-/// ## Topics
-/// ### Scanning
-/// - ``startScanning()``
-/// - ``stopScanning()``
-/// ### Connection
-/// - ``connect(to:)``
-/// - ``disconnect()``
-/// ### Communication
-/// - ``sendCommand(_:)``
 @MainActor
 class BLEManager: NSObject, ObservableObject, DeviceTransport {
     @Published var discoveredDevices: [CBPeripheral] = []
