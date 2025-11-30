@@ -40,8 +40,29 @@ class LoRaCueService: ObservableObject {
 
     // MARK: - Core JSON-RPC Methods
 
+    enum RPCMethod: String {
+        case ping
+        case deviceInfo = "device:info"
+        case deviceReset = "device:reset"
+        case generalGet = "general:get"
+        case generalSet = "general:set"
+        case powerGet = "power:get"
+        case powerSet = "power:set"
+        case loraGet = "lora:get"
+        case loraSet = "lora:set"
+        case loraBands = "lora:bands"
+        case loraPresetsList = "lora:presets:list"
+        case loraKeyGet = "lora:key:get"
+        case loraKeySet = "lora:key:set"
+        case pairedList = "paired:list"
+        case pairedAdd = "paired:add"
+        case pairedPair = "paired:pair"
+        case pairedDelete = "paired:delete"
+        case firmwareUpgrade = "firmware:upgrade"
+    }
+
     private func sendRequest<T: Decodable>(
-        method: String,
+        method: RPCMethod,
         params: (any Encodable)? = nil,
         retryCount: Int = 0
     ) async throws -> T {
@@ -59,7 +80,7 @@ class LoRaCueService: ObservableObject {
         defer { isProcessingRequest = false }
 
         do {
-            return try await self.sendRequestInternal(method: method, params: params)
+            return try await self.sendRequestInternal(method: method.rawValue, params: params)
         } catch let error as JSONRPCError {
             // Determine if error is retryable
             let isRetryable = self.isRetryableError(error)
@@ -69,7 +90,7 @@ class LoRaCueService: ObservableObject {
                 let delay = UInt64(pow(2.0, Double(retryCount)) * 100_000_000) // 100ms, 200ms
                 self.logger
                     .warning(
-                        "⚠️ Retrying \(method) (attempt \(retryCount + 1)/\(maxRetries)) after \(delay / 1_000_000)ms"
+                        "⚠️ Retrying \(method.rawValue) (attempt \(retryCount + 1)/\(maxRetries)) after \(delay / 1_000_000)ms"
                     )
                 try await Task.sleep(nanoseconds: delay)
                 return try await self.sendRequest(method: method, params: params, retryCount: retryCount + 1)
@@ -150,7 +171,7 @@ class LoRaCueService: ObservableObject {
     }
 
     private func sendRequestVoid(
-        method: String,
+        method: RPCMethod,
         params: (any Encodable)? = nil
     ) async throws {
         let _: String = try await sendRequest(method: method, params: params)
@@ -159,85 +180,85 @@ class LoRaCueService: ObservableObject {
     // MARK: - Device Methods
 
     func ping() async throws -> String {
-        try await self.sendRequest(method: "ping")
+        try await self.sendRequest(method: .ping)
     }
 
     func getDeviceInfo() async throws -> DeviceInfo {
-        try await self.sendRequest(method: "device:info")
+        try await self.sendRequest(method: .deviceInfo)
     }
 
     func factoryReset() async throws {
-        try await self.sendRequestVoid(method: "device:reset")
+        try await self.sendRequestVoid(method: .deviceReset)
     }
 
     // MARK: - General Configuration
 
     func getGeneral() async throws -> GeneralConfig {
-        try await self.sendRequest(method: "general:get")
+        try await self.sendRequest(method: .generalGet)
     }
 
     func setGeneral(_ config: GeneralConfig) async throws {
-        try await self.sendRequestVoid(method: "general:set", params: config)
+        try await self.sendRequestVoid(method: .generalSet, params: config)
     }
 
     // MARK: - Power Management
 
     func getPowerManagement() async throws -> PowerConfig {
-        try await self.sendRequest(method: "power:get")
+        try await self.sendRequest(method: .powerGet)
     }
 
     func setPowerManagement(_ config: PowerConfig) async throws {
-        try await self.sendRequestVoid(method: "power:set", params: config)
+        try await self.sendRequestVoid(method: .powerSet, params: config)
     }
 
     // MARK: - LoRa Configuration
 
     func getLoRa() async throws -> LoRaConfig {
-        try await self.sendRequest(method: "lora:get")
+        try await self.sendRequest(method: .loraGet)
     }
 
     func setLoRa(_ config: LoRaConfig) async throws {
-        try await self.sendRequestVoid(method: "lora:set", params: config)
+        try await self.sendRequestVoid(method: .loraSet, params: config)
     }
 
     func getLoRaBands() async throws -> [LoRaBand] {
-        try await self.sendRequest(method: "lora:bands")
+        try await self.sendRequest(method: .loraBands)
     }
 
     func getLoRaPresets() async throws -> [LoRaPreset] {
-        try await self.sendRequest(method: "lora:presets:list")
+        try await self.sendRequest(method: .loraPresetsList)
     }
 
     func getLoRaKey() async throws -> LoRaKey {
-        try await self.sendRequest(method: "lora:key:get")
+        try await self.sendRequest(method: .loraKeyGet)
     }
 
     func setLoRaKey(_ key: LoRaKey) async throws {
-        try await self.sendRequestVoid(method: "lora:key:set", params: key)
+        try await self.sendRequestVoid(method: .loraKeySet, params: key)
     }
 
     // MARK: - Device Pairing
 
     func getPairedDevices() async throws -> [PairedDevice] {
-        try await self.sendRequest(method: "paired:list")
+        try await self.sendRequest(method: .pairedList)
     }
 
     func addPairedDevice(_ device: PairedDevice) async throws {
-        try await self.sendRequestVoid(method: "paired:add", params: device)
+        try await self.sendRequestVoid(method: .pairedAdd, params: device)
     }
 
     func updatePairedDevice(_ device: PairedDevice) async throws {
-        try await self.sendRequestVoid(method: "paired:pair", params: device)
+        try await self.sendRequestVoid(method: .pairedPair, params: device)
     }
 
     func deletePairedDevice(mac: String) async throws {
-        try await self.sendRequestVoid(method: "paired:delete", params: ["mac": mac])
+        try await self.sendRequestVoid(method: .pairedDelete, params: ["mac": mac])
     }
 
     // MARK: - Firmware
 
     func upgradeFirmware(size: Int) async throws {
-        try await self.sendRequestVoid(method: "firmware:upgrade", params: ["size": size])
+        try await self.sendRequestVoid(method: .firmwareUpgrade, params: ["size": size])
     }
 }
 
