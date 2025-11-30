@@ -17,6 +17,20 @@ struct DeviceListView: View {
     @StateObject private var usbManager = USBManager()
     #endif
 
+    // MARK: - Constants
+
+    fileprivate enum Constants {
+        static let scanDuration: UInt64 = 10_000_000_000
+        static let toolbarIconSize: CGFloat = 28
+        static let toolbarIconCornerRadius: CGFloat = 6
+        static let macOSIconSize: CGFloat = 80
+        static let macOSIconCornerRadius: CGFloat = 18
+        static let deviceRowHeight: CGFloat = 80
+        static let deviceRowCornerRadius: CGFloat = 8
+        static let deviceRowIconWidth: CGFloat = 40
+        static let autoScanDelay: UInt64 = 500_000_000
+    }
+
     init(service: LoRaCueService) {
         self.service = service
         self.bleManager = service.bleManager
@@ -158,7 +172,7 @@ struct DeviceListView: View {
                     .refreshable {
                         self.scan()
                         self.hasScanned = true
-                        try? await Task.sleep(nanoseconds: 10_000_000_000) // 10s scan
+                        try? await Task.sleep(nanoseconds: Constants.scanDuration)
                         self.bleManager.stopScanning()
                     }
                     #if !os(iOS)
@@ -189,8 +203,8 @@ struct DeviceListView: View {
                     HStack(spacing: 8) {
                         Image("ToolbarIcon")
                             .resizable()
-                            .frame(width: 28, height: 28)
-                            .cornerRadius(6)
+                            .frame(width: Constants.toolbarIconSize, height: Constants.toolbarIconSize)
+                            .cornerRadius(Constants.toolbarIconCornerRadius)
                         Text("LoRaCue Manager")
                             .font(.headline)
                     }
@@ -258,13 +272,13 @@ struct DeviceListView: View {
                             #if os(macOS)
                             Image(nsImage: NSImage(named: "AppIcon") ?? NSImage())
                                 .resizable()
-                                .frame(width: 80, height: 80)
-                                .cornerRadius(18)
+                                .frame(width: Constants.macOSIconSize, height: Constants.macOSIconSize)
+                                .cornerRadius(Constants.macOSIconCornerRadius)
                             #else
                             Image(uiImage: UIImage(named: "AppIcon") ?? UIImage())
                                 .resizable()
-                                .frame(width: 80, height: 80)
-                                .cornerRadius(18)
+                                .frame(width: Constants.macOSIconSize, height: Constants.macOSIconSize)
+                                .cornerRadius(Constants.macOSIconCornerRadius)
                             #endif
 
                             Text("LoRaCue Manager")
@@ -282,13 +296,13 @@ struct DeviceListView: View {
                         #if os(macOS)
                         Image(nsImage: NSImage(named: "AppIcon") ?? NSImage())
                             .resizable()
-                            .frame(width: 80, height: 80)
-                            .cornerRadius(18)
+                            .frame(width: Constants.macOSIconSize, height: Constants.macOSIconSize)
+                            .cornerRadius(Constants.macOSIconCornerRadius)
                         #else
                         Image(uiImage: UIImage(named: "AppIcon") ?? UIImage())
                             .resizable()
-                            .frame(width: 80, height: 80)
-                            .cornerRadius(18)
+                            .frame(width: Constants.macOSIconSize, height: Constants.macOSIconSize)
+                            .cornerRadius(Constants.macOSIconCornerRadius)
                         #endif
 
                         Text("LoRaCue Manager")
@@ -314,7 +328,7 @@ struct DeviceListView: View {
             }
         }
         .task {
-            try? await Task.sleep(nanoseconds: 500_000_000)
+            try? await Task.sleep(nanoseconds: Constants.autoScanDelay)
             self.scan()
         }
     }
@@ -421,7 +435,7 @@ struct DeviceRow: View {
             Image(systemName: self.icon)
                 .font(.system(size: 28))
                 .foregroundStyle(self.isConnected ? .green : .blue)
-                .frame(width: 40)
+                .frame(width: DeviceListView.Constants.deviceRowIconWidth)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(self.name)
@@ -455,9 +469,9 @@ struct DeviceRow: View {
             }
         }
         .padding(12)
-        .frame(height: 80)
+        .frame(height: DeviceListView.Constants.deviceRowHeight)
         .background(Color.gray.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: DeviceListView.Constants.deviceRowCornerRadius))
         .contentShape(Rectangle())
         .onTapGesture {
             if !self.isConnected {
