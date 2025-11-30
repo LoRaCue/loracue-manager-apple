@@ -56,6 +56,14 @@
 "error.timeout" = "Operation timed out";
 "error.device_not_found" = "Device not found";
 "error.invalid_data" = "Invalid data received";
+"error.json_parse" = "Invalid JSON received from device";
+"error.invalid_request" = "Invalid request format";
+"error.method_not_found" = "Command not supported by device";
+"error.invalid_params" = "Invalid parameters: %@";
+"error.internal_error" = "Device error: %@";
+"error.transport_error" = "Communication error: %@";
+"error.request_timeout" = "Request timed out";
+"error.unknown" = "Error %d: %@";
 
 /* Accessibility */
 "a11y.scan_hint" = "Searches for nearby LoRaCue devices";

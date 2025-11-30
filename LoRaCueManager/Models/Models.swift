@@ -188,21 +188,21 @@ enum JSONRPCError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .parseError:
-            "Invalid JSON received from device"
+            "error.json_parse".localized
         case .invalidRequest:
-            "Invalid request format"
+            "error.invalid_request".localized
         case .methodNotFound:
-            "Command not supported by device"
+            "error.method_not_found".localized
         case let .invalidParams(detail):
-            "Invalid parameters: \(detail)"
+            "error.invalid_params".localized(detail)
         case let .internalError(detail):
-            "Device error: \(detail)"
+            "error.internal_error".localized(detail)
         case let .transportError(detail):
-            "Communication error: \(detail)"
+            "error.transport_error".localized(detail)
         case .timeout:
-            "Request timed out"
+            "error.request_timeout".localized
         case let .unknown(code, message):
-            "Error \(code): \(message)"
+            "error.unknown".localized(code, message)
         }
     }
 }
