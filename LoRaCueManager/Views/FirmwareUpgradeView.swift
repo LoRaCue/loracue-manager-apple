@@ -1,9 +1,15 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+enum FirmwareSourceTab: Int {
+    case release = 0
+    case zip = 1
+    case bin = 2
+}
+
 struct FirmwareUpgradeView: View {
     @StateObject private var viewModel: FirmwareUpgradeViewModel
-    @State private var selectedTab = 0
+    @State private var selectedTab = FirmwareSourceTab.release
     @State private var showZipPicker = false
     @State private var showBinPicker = false
     @State private var showBinWarning = false
@@ -25,24 +31,33 @@ struct FirmwareUpgradeView: View {
                             icon: "arrow.down.circle.fill",
                             title: "Release",
                             subtitle: "GitHub release",
-                            tag: 0,
-                            selectedTab: self.$selectedTab
+                            tag: FirmwareSourceTab.release.rawValue,
+                            selectedTab: Binding(
+                                get: { self.selectedTab.rawValue },
+                                set: { self.selectedTab = FirmwareSourceTab(rawValue: $0) ?? .release }
+                            )
                         )
 
                         FirmwareSourceCard(
                             icon: "archivebox.fill",
                             title: "ZIP",
                             subtitle: "Firmware archive file",
-                            tag: 1,
-                            selectedTab: self.$selectedTab
+                            tag: FirmwareSourceTab.zip.rawValue,
+                            selectedTab: Binding(
+                                get: { self.selectedTab.rawValue },
+                                set: { self.selectedTab = FirmwareSourceTab(rawValue: $0) ?? .release }
+                            )
                         )
 
                         FirmwareSourceCard(
                             icon: "doc.fill",
                             title: "BIN",
                             subtitle: "Firmware binary file",
-                            tag: 2,
-                            selectedTab: self.$selectedTab
+                            tag: FirmwareSourceTab.bin.rawValue,
+                            selectedTab: Binding(
+                                get: { self.selectedTab.rawValue },
+                                set: { self.selectedTab = FirmwareSourceTab(rawValue: $0) ?? .release }
+                            )
                         )
                     }
                     .padding(.horizontal, 4)
@@ -55,30 +70,39 @@ struct FirmwareUpgradeView: View {
                         icon: "arrow.down.circle.fill",
                         title: "Release",
                         subtitle: "GitHub release",
-                        tag: 0,
-                        selectedTab: self.$selectedTab
+                        tag: FirmwareSourceTab.release.rawValue,
+                        selectedTab: Binding(
+                            get: { self.selectedTab.rawValue },
+                            set: { self.selectedTab = FirmwareSourceTab(rawValue: $0) ?? .release }
+                        )
                     )
 
                     FirmwareSourceCard(
                         icon: "archivebox.fill",
                         title: "ZIP",
                         subtitle: "Firmware archive file",
-                        tag: 1,
-                        selectedTab: self.$selectedTab
+                        tag: FirmwareSourceTab.zip.rawValue,
+                        selectedTab: Binding(
+                            get: { self.selectedTab.rawValue },
+                            set: { self.selectedTab = FirmwareSourceTab(rawValue: $0) ?? .release }
+                        )
                     )
 
                     FirmwareSourceCard(
                         icon: "doc.fill",
                         title: "BIN",
                         subtitle: "Firmware binary file",
-                        tag: 2,
-                        selectedTab: self.$selectedTab
+                        tag: FirmwareSourceTab.bin.rawValue,
+                        selectedTab: Binding(
+                            get: { self.selectedTab.rawValue },
+                            set: { self.selectedTab = FirmwareSourceTab(rawValue: $0) ?? .release }
+                        )
                     )
                 }
                 .frame(height: 80)
                 #endif
 
-                if self.selectedTab == 0 {
+                if self.selectedTab == .release {
                     Toggle("Include Pre-releases", isOn: self.$viewModel.includePrerelease)
                         .onChange(of: self.viewModel.includePrerelease) {
                             Task { await self.viewModel.loadReleases() }
@@ -87,14 +111,12 @@ struct FirmwareUpgradeView: View {
             }
 
             switch self.selectedTab {
-            case 0:
+            case .release:
                 self.githubSections
-            case 1:
+            case .zip:
                 self.zipSections
-            case 2:
+            case .bin:
                 self.binSections
-            default:
-                EmptyView()
             }
 
             if let progress = viewModel.uploadProgress {

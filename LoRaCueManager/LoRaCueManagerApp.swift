@@ -28,7 +28,7 @@ struct LoRaCueManagerApp: App {
         WindowGroup {
             ContentView(service: self.service)
             #if os(macOS)
-                .frame(minWidth: 900, minHeight: 600)
+                .frame(minWidth: AppConstants.App.minMacOSWidth, minHeight: AppConstants.App.minMacOSHeight)
             #else
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
                     Logger.ui.info("📱 App going to background, disconnecting BLE")
@@ -57,8 +57,8 @@ struct SettingsView: View {
         TabView {
             Form {
                 Section("About") {
-                    LabeledContent("Version", value: "1.0.0")
-                    LabeledContent("Build", value: "1")
+                    LabeledContent("Version", value: AppConstants.App.version)
+                    LabeledContent("Build", value: AppConstants.App.build)
                 }
             }
             .tabItem {

@@ -244,7 +244,7 @@ struct DeviceListView: View {
                     ForEach(self.usbManager.discoveredDevices, id: \.self) { path in
                         DeviceRow(
                             name: path.components(separatedBy: "/").last ?? "Unknown",
-                            type: "USB",
+                            type: .usb,
                             detail: path,
                             isConnected: self.usbManager.isConnected,
                             isSelected: self.selectedDevice == path
@@ -377,7 +377,7 @@ struct DeviceListView: View {
 
         DeviceRow(
             name: advData?.model ?? self.deviceDisplayName(peripheral.name ?? "Unknown"),
-            type: "BLE",
+            type: .ble,
             detail: advData?.version ?? "",
             isConnected: isConnected,
             isSelected: isSelected
@@ -411,28 +411,37 @@ struct DeviceListView: View {
     }
 }
 
+// MARK: - Device Types
+
+enum DeviceType: String {
+    case ble
+    case usb
+    case mock
+    case unknown
+
+    var icon: String {
+        switch self {
+        case .ble: "antenna.radiowaves.left.and.right"
+        case .usb: "cable.connector"
+        case .mock: "cpu"
+        case .unknown: "questionmark"
+        }
+    }
+}
+
 // MARK: - macOS Device Row
 
 struct DeviceRow: View {
     let name: String
-    let type: String
+    let type: DeviceType
     let detail: String
     let isConnected: Bool
     let isSelected: Bool
     let onTap: () -> Void
 
-    private var icon: String {
-        switch self.type {
-        case "BLE": "antenna.radiowaves.left.and.right"
-        case "USB": "cable.connector"
-        case "Mock": "cpu"
-        default: "questionmark"
-        }
-    }
-
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: self.icon)
+            Image(systemName: self.type.icon)
                 .font(.system(size: 28))
                 .foregroundStyle(self.isConnected ? .green : .blue)
                 .frame(width: DeviceListView.Constants.deviceRowIconWidth)

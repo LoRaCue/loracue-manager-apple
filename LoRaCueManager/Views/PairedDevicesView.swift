@@ -125,7 +125,7 @@ struct PairedDevicesView: View {
         }
         .task {
             while !self.viewModel.service.isReady {
-                try? await Task.sleep(nanoseconds: 100_000_000)
+                try? await Task.sleep(nanoseconds: AppConstants.taskSleepNanoseconds)
             }
             await self.viewModel.load()
         }
@@ -185,7 +185,8 @@ struct PairedDeviceModal: View {
     @Environment(\.dismiss) var dismiss
 
     private var isDirty: Bool {
-        let isValid = !self.name.isEmpty && self.mac.count == 17 && self.aesKey.count == 64
+        let isValid = !self.name.isEmpty && self.mac.count == AppConstants.macAddressLength && self.aesKey
+            .count == AppConstants.aesKeyLength
         let hasChanges = self.name != self.originalName || self.mac != self.originalMac || self.aesKey != self
             .originalKey
         return isValid && hasChanges
@@ -204,7 +205,7 @@ struct PairedDeviceModal: View {
                         .autocorrectionDisabled()
                         .onChange(of: self.mac) { _, newValue in
                             let formatted = LoRaCalculator.formatMACAddress(newValue)
-                            self.mac = String(formatted.prefix(17))
+                            self.mac = String(formatted.prefix(AppConstants.macAddressLength))
                         }
                 } else {
                     LabeledContent("MAC Address") {
@@ -225,12 +226,18 @@ struct PairedDeviceModal: View {
                                 .autocorrectionDisabled()
                                 .onChange(of: self.aesKey) { _, newValue in
                                     let filtered = newValue.filter(\.isHexDigit).lowercased()
-                                    self.aesKey = String(filtered.prefix(64))
+                                    self.aesKey = String(filtered.prefix(AppConstants.aesKeyLength))
                                 }
                         } else {
-                            TextField("", text: .constant(String(repeating: "•", count: max(self.aesKey.count, 64))))
-                                .disabled(true)
-                                .font(.system(.body, design: .monospaced))
+                            TextField(
+                                "",
+                                text: .constant(String(
+                                    repeating: "•",
+                                    count: max(self.aesKey.count, AppConstants.aesKeyLength)
+                                ))
+                            )
+                            .disabled(true)
+                            .font(.system(.body, design: .monospaced))
                         }
 
                         Button {
@@ -252,16 +259,11 @@ struct PairedDeviceModal: View {
                         Spacer()
 
                         Button {
-                            #if os(iOS)
-                            UIPasteboard.general.string = self.aesKey
-                            #else
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(self.aesKey, forType: .string)
-                            #endif
+                            ClipboardHelper.copy(self.aesKey)
                         } label: {
                             Label("Copy", systemImage: "doc.on.doc")
                         }
-                        .disabled(self.aesKey.count != 64)
+                        .disabled(self.aesKey.count != AppConstants.aesKeyLength)
                     }
                 }
             }

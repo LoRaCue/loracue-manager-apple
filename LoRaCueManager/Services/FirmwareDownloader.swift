@@ -186,12 +186,12 @@ class FirmwareDownloader {
         let data = try Data(contentsOf: url)
 
         // Basic sanity checks
-        guard data.count > 1024 else {
+        guard data.count > AppConstants.Firmware.minBinarySize else {
             throw DownloadError.invalidBinarySize
         }
 
         // Check for ESP32 magic bytes (0xE9 at offset 0)
-        guard data.first == 0xE9 else {
+        guard data.first == AppConstants.Firmware.esp32MagicByte else {
             throw DownloadError.invalidBinaryFormat
         }
 

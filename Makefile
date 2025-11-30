@@ -52,7 +52,7 @@ build-ios:
 	@xcodebuild clean build \
 		-workspace LoRaCueManager.xcworkspace \
 		-scheme LoRaCueManager \
-		-destination "platform=iOS Simulator,name=iPhone 16e,OS=18.6"
+		-destination "platform=iOS Simulator,name=iPhone 16e,OS=26.0"
 
 build-macos:
 	@echo "Building for macOS..."

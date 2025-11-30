@@ -2,9 +2,9 @@ import Foundation
 import OSLog
 
 class GitHubReleaseService {
-    private let repoOwner = "LoRaCue"
-    private let repoName = "loracue"
-    private let baseURL = "https://api.github.com"
+    private let repoOwner = AppConstants.GitHub.repoOwner
+    private let repoName = AppConstants.GitHub.repoName
+    private let baseURL = AppConstants.GitHub.baseURL
 
     // MARK: - Fetch Releases
 
