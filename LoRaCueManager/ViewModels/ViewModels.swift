@@ -33,23 +33,24 @@ class DeviceListViewModel: ObservableObject {
     }
 }
 
-// MARK: - General ViewModel
+// MARK: - Base Config ViewModel
 
 @MainActor
-class GeneralViewModel: ObservableObject {
-    @Published var config: GeneralConfig?
+class ConfigViewModel<T: Codable & Equatable>: ObservableObject {
+    @Published var config: T?
     @Published var isLoading = false
     @Published var error: String?
     @Published var isDirty = false
 
-    private var originalConfig: GeneralConfig?
-
+    var originalConfig: T?
     let service: LoRaCueService
-    private var cancellables = Set<AnyCancellable>()
+    var cancellables = Set<AnyCancellable>()
 
     init(service: LoRaCueService) {
         self.service = service
+    }
 
+    func setupBindings() {
         self.$config
             .dropFirst()
             .sink { [weak self] newConfig in
@@ -58,14 +59,13 @@ class GeneralViewModel: ObservableObject {
             .store(in: &self.cancellables)
     }
 
-    func load() async {
+    func load(_ fetch: () async throws -> T) async {
         self.isLoading = true
         defer { isLoading = false }
-
         do {
-            let loadedConfig = try await self.service.getGeneral()
-            self.config = loadedConfig
-            self.originalConfig = loadedConfig
+            let loaded = try await fetch()
+            self.config = loaded
+            self.originalConfig = loaded
             self.isDirty = false
             self.error = nil
         } catch {
@@ -73,27 +73,46 @@ class GeneralViewModel: ObservableObject {
         }
     }
 
-    func save() async {
+    func save(_ persist: (T) async throws -> Void, reload: () async throws -> T) async {
         guard let config else { return }
         self.isLoading = true
         defer { isLoading = false }
-
         do {
-            try await self.service.setGeneral(config)
-            // Reload to get latest data from device
-            let reloadedConfig = try await self.service.getGeneral()
-            self.config = reloadedConfig
-            self.originalConfig = reloadedConfig
+            try await persist(config)
+            let reloaded = try await reload()
+            self.config = reloaded
+            self.originalConfig = reloaded
             self.isDirty = false
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - General ViewModel
+
+@MainActor
+class GeneralViewModel: ConfigViewModel<GeneralConfig> {
+    override init(service: LoRaCueService) {
+        super.init(service: service)
+        self.setupBindings()
+    }
+
+    func load() async {
+        await super.load { try await self.service.getGeneral() }
+    }
+
+    func save() async {
+        await super.save {
+            try await self.service.setGeneral($0)
+        } reload: {
+            try await self.service.getGeneral()
         }
     }
 
     func factoryReset() async {
         self.isLoading = true
         defer { isLoading = false }
-
         do {
             try await self.service.factoryReset()
         } catch {
@@ -105,56 +124,22 @@ class GeneralViewModel: ObservableObject {
 // MARK: - Power ViewModel
 
 @MainActor
-class PowerViewModel: ObservableObject {
-    @Published var config: PowerConfig?
-    @Published var isLoading = false
-    @Published var error: String?
-    @Published var isDirty = false
-
-    private var originalConfig: PowerConfig?
-    private var cancellables = Set<AnyCancellable>()
-
-    let service: LoRaCueService
-
-    init(service: LoRaCueService) {
-        self.service = service
-
-        self.$config
-            .dropFirst()
-            .sink { [weak self] newConfig in
-                self?.isDirty = newConfig != self?.originalConfig
-            }
-            .store(in: &self.cancellables)
+class PowerViewModel: ConfigViewModel<PowerConfig> {
+    override init(service: LoRaCueService) {
+        super.init(service: service)
+        self.setupBindings()
     }
 
     func load() async {
-        self.isLoading = true
-        defer { isLoading = false }
-
-        do {
-            let loadedConfig = try await self.service.getPowerManagement()
-            self.config = loadedConfig
-            self.originalConfig = loadedConfig
-            self.isDirty = false
-        } catch {
-            self.error = error.localizedDescription
-        }
+        await super.load { try await self.service.getPowerManagement() }
     }
 
     func save() async {
-        guard let config else { return }
-        self.isLoading = true
-        defer { isLoading = false }
-
-        do {
-            try await self.service.setPowerManagement(config)
-            // Reload to get latest data from device
-            let reloadedConfig = try await self.service.getPowerManagement()
-            self.config = reloadedConfig
-            self.originalConfig = reloadedConfig
-            self.isDirty = false
-        } catch {
-            self.error = error.localizedDescription
+        await super.save {
+            try await self.service.setPowerManagement($0)
+        }
+        reload: {
+            try await self.service.getPowerManagement()
         }
     }
 }
@@ -162,29 +147,14 @@ class PowerViewModel: ObservableObject {
 // MARK: - LoRa ViewModel
 
 @MainActor
-class LoRaViewModel: ObservableObject {
-    @Published var config: LoRaConfig?
+class LoRaViewModel: ConfigViewModel<LoRaConfig> {
     @Published var bands: [LoRaBand] = []
     @Published var presets: [LoRaPreset] = []
-    @Published var isLoading = false
-    @Published var error: String?
     @Published var showBandWarning = false
-    @Published var isDirty = false
 
-    private var originalConfig: LoRaConfig?
-    private var cancellables = Set<AnyCancellable>()
-
-    let service: LoRaCueService
-
-    init(service: LoRaCueService) {
-        self.service = service
-
-        self.$config
-            .dropFirst()
-            .sink { [weak self] newConfig in
-                self?.isDirty = newConfig != self?.originalConfig
-            }
-            .store(in: &self.cancellables)
+    override init(service: LoRaCueService) {
+        super.init(service: service)
+        self.setupBindings()
     }
 
     func load() async {
@@ -200,6 +170,8 @@ class LoRaViewModel: ObservableObject {
             self.config = loadedConfig
             self.originalConfig = loadedConfig
             self.isDirty = false
+            self.error = nil
+
             self.bands = try await bandsTask
             self.presets = await (try? presetsTask) ?? []
         } catch {
@@ -208,19 +180,10 @@ class LoRaViewModel: ObservableObject {
     }
 
     func save() async {
-        guard let config else { return }
-        self.isLoading = true
-        defer { isLoading = false }
-
-        do {
-            try await self.service.setLoRa(config)
-            // Reload to get latest data from device
-            let reloadedConfig = try await self.service.getLoRa()
-            self.config = reloadedConfig
-            self.originalConfig = reloadedConfig
-            self.isDirty = false
-        } catch {
-            self.error = error.localizedDescription
+        await super.save {
+            try await self.service.setLoRa($0)
+        } reload: {
+            try await self.service.getLoRa()
         }
     }
 
