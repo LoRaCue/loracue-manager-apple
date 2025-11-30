@@ -66,7 +66,7 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
     private var centralManager: CBCentralManager!
     private var txCharacteristic: CBCharacteristic?
     private var rxCharacteristic: CBCharacteristic?
-    private var responseBuffer = ""
+    private var responseBuffer = Data()
     private var responseContinuation: CheckedContinuation<String, Error>?
     private var responseAccumulationTask: Task<Void, Never>?
     private var timeoutTask: Task<Void, Never>?
@@ -209,7 +209,7 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
                 self.timeoutTask?.cancel()
 
                 self.responseContinuation = continuation
-                self.responseBuffer = ""
+                self.responseBuffer.removeAll()
 
                 let data = (command + "\n").data(using: .utf8)!
                 Logger.ble.info("📤 Writing \(data.count) bytes to TX characteristic")
@@ -232,7 +232,7 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
             // Clean up on error
             self.timeoutTask?.cancel()
             self.responseContinuation = nil
-            self.responseBuffer = ""
+            self.responseBuffer.removeAll()
             throw error
         }
 
@@ -351,7 +351,7 @@ extension BLEManager: CBCentralManagerDelegate {
             self.responseContinuation = nil
             self.responseAccumulationTask?.cancel()
             self.responseAccumulationTask = nil
-            self.responseBuffer = ""
+            self.responseBuffer.removeAll()
 
             // Clean up state
             self.connectedPeripheral = nil
@@ -443,23 +443,21 @@ extension BLEManager: CBPeripheralDelegate {
             return
         }
 
-        guard let data = characteristic.value,
-              let string = String(data: data, encoding: .utf8)
-        else {
-            Logger.ble.warning("⚠️ Received data but couldn't decode as UTF-8")
+        guard let data = characteristic.value else {
+            Logger.ble.warning("⚠️ Received empty data or nil")
             return
         }
 
         Task { @MainActor in
-            Logger.ble.info("📥 Received chunk: \(string.count) chars")
-            self.responseBuffer += string
+            Logger.ble.info("📥 Received chunk: \(data.count) bytes")
+            self.responseBuffer.append(data)
 
             // Prevent buffer overflow from corrupted stream
             if self.responseBuffer.count > Constants.maxResponseBufferSize {
                 Logger.ble.error("❌ Response buffer overflow - possible corrupted data")
                 self.responseContinuation?.resume(throwing: BLEError.invalidResponse)
                 self.responseContinuation = nil
-                self.responseBuffer = ""
+                self.responseBuffer.removeAll()
                 self.responseAccumulationTask?.cancel()
                 self.responseAccumulationTask = nil
                 return
@@ -472,7 +470,16 @@ extension BLEManager: CBPeripheralDelegate {
             self.responseAccumulationTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: Constants.responseAccumulationDelay)
 
-                let trimmed = self.responseBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard let string = String(data: self.responseBuffer, encoding: .utf8) else {
+                    // Keep waiting? Or fail? For now, assume split char and wait,
+                    // OR it might just be garbage.
+                    // If we don't decode, we can't check for newline/JSON easily.
+                    // Let's just log and wait for next packet or timeout.
+                    Logger.ble.warning("⚠️ Buffer not valid UTF-8 yet, waiting for more data...")
+                    return
+                }
+
+                let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
                 Logger.ble.info("📦 Accumulated response: \(trimmed.count) chars")
 
                 // Check for complete response:
@@ -488,7 +495,7 @@ extension BLEManager: CBPeripheralDelegate {
                     Logger.ble.info("✅ Complete response: \(trimmed.prefix(100))...")
                     self.responseContinuation?.resume(returning: trimmed)
                     self.responseContinuation = nil
-                    self.responseBuffer = ""
+                    self.responseBuffer.removeAll()
                     self.responseAccumulationTask = nil
                 }
             }
