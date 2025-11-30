@@ -44,6 +44,21 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
         }
     }
 
+    // MARK: - Constants
+
+    private enum Constants {
+        static let nusServiceUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
+        static let nusTxUUID = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
+        static let nusRxUUID = CBUUID(string: "6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
+
+        static let connectionTimeout: UInt64 = 5_000_000_000 // 5 seconds
+        static let commandTimeout: UInt64 = 5_000_000_000 // 5 seconds
+        static let deviceReadyTimeoutIterations = 50
+        static let deviceReadyCheckInterval: UInt64 = 100_000_000 // 100 ms
+        static let responseAccumulationDelay: UInt64 = 200_000_000 // 200 ms
+        static let maxResponseBufferSize = 65536
+    }
+
     var onConnectionChanged: (() -> Void)?
 
     let instanceId = UUID().uuidString.prefix(8)
@@ -63,11 +78,6 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
 
     private var commandQueue: [QueuedCommand] = []
     private var isProcessingQueue = false
-
-    // Nordic UART Service UUIDs
-    private nonisolated(unsafe) let nusServiceUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
-    private nonisolated(unsafe) let nusTxUUID = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
-    private nonisolated(unsafe) let nusRxUUID = CBUUID(string: "6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
 
     override init() {
         super.init()
@@ -104,7 +114,7 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
 
         // Timeout after 5 seconds
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            try? await Task.sleep(nanoseconds: Constants.connectionTimeout)
             if self.connectionState == .connecting {
                 Logger.ble.error("⏱️ Connection timeout")
                 self.centralManager.cancelPeripheralConnection(peripheral)
@@ -160,15 +170,15 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
             throw BLEError.notConnected
         }
 
-        // Wait for device to be ready (max 5 seconds)
+        // Wait for device to be ready
         if !self._isReady {
             Logger.ble.info("⏳ Waiting for device to be ready...")
-            for _ in 0 ..< 50 {
+            for _ in 0 ..< Constants.deviceReadyTimeoutIterations {
                 if self._isReady { break }
-                try await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                try await Task.sleep(nanoseconds: Constants.deviceReadyCheckInterval)
             }
             if !self._isReady {
-                Logger.ble.error("❌ Device not ready after 5 seconds")
+                Logger.ble.error("❌ Device not ready after timeout")
                 throw BLEError.notConnected
             }
             Logger.ble.info("✅ Device ready, proceeding with command")
@@ -191,7 +201,7 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
 
                 self.timeoutTask = Task { @MainActor in
                     do {
-                        try await Task.sleep(nanoseconds: 5_000_000_000) // 5s timeout
+                        try await Task.sleep(nanoseconds: Constants.commandTimeout)
                     } catch {
                         return // Task was cancelled
                     }
@@ -304,7 +314,7 @@ extension BLEManager: CBCentralManagerDelegate {
             self.connectionState = .connected
             Logger.ble.info("📊 Connection state updated, discovering services...")
         }
-        peripheral.discoverServices([self.nusServiceUUID])
+        peripheral.discoverServices([Constants.nusServiceUUID])
         Logger.ble.info("🔍 Requested service discovery for NUS")
     }
 
@@ -354,9 +364,9 @@ extension BLEManager: CBPeripheralDelegate {
                 return
             }
             Logger.ble.info("🔍 Discovered \(services.count) service(s)")
-            for service in services where service.uuid == self.nusServiceUUID {
+            for service in services where service.uuid == Constants.nusServiceUUID {
                 Logger.ble.info("✅ Found NUS service, discovering characteristics...")
-                peripheral.discoverCharacteristics([nusTxUUID, nusRxUUID], for: service)
+                peripheral.discoverCharacteristics([Constants.nusTxUUID, Constants.nusRxUUID], for: service)
             }
         }
     }
@@ -379,9 +389,9 @@ extension BLEManager: CBPeripheralDelegate {
             var foundTx = false
             var foundRx = false
             for characteristic in characteristics {
-                if characteristic.uuid == self.nusTxUUID {
+                if characteristic.uuid == Constants.nusTxUUID {
                     foundTx = true
-                } else if characteristic.uuid == self.nusRxUUID {
+                } else if characteristic.uuid == Constants.nusRxUUID {
                     foundRx = true
                 }
             }
@@ -391,10 +401,10 @@ extension BLEManager: CBPeripheralDelegate {
                 Logger.ble.info("✅ objectWillChange sent (characteristics ready)")
             }
             for characteristic in characteristics {
-                if characteristic.uuid == self.nusTxUUID {
+                if characteristic.uuid == Constants.nusTxUUID {
                     self.txCharacteristic = characteristic
                     Logger.ble.info("✅ TX characteristic ready")
-                } else if characteristic.uuid == self.nusRxUUID {
+                } else if characteristic.uuid == Constants.nusRxUUID {
                     self.rxCharacteristic = characteristic
                     peripheral.setNotifyValue(true, for: characteristic)
                     Logger.ble.info("✅ RX characteristic ready, notifications enabled")
@@ -429,7 +439,7 @@ extension BLEManager: CBPeripheralDelegate {
             self.responseBuffer += string
 
             // Prevent buffer overflow from corrupted stream
-            if self.responseBuffer.count > 65536 {
+            if self.responseBuffer.count > Constants.maxResponseBufferSize {
                 Logger.ble.error("❌ Response buffer overflow - possible corrupted data")
                 self.responseContinuation?.resume(throwing: BLEError.invalidResponse)
                 self.responseContinuation = nil
@@ -444,7 +454,7 @@ extension BLEManager: CBPeripheralDelegate {
 
             // Wait for more chunks (200ms to handle large responses)
             self.responseAccumulationTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 200_000_000)
+                try? await Task.sleep(nanoseconds: Constants.responseAccumulationDelay)
 
                 let trimmed = self.responseBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
                 Logger.ble.info("📦 Accumulated response: \(trimmed.count) chars")
