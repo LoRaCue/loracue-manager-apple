@@ -10,7 +10,7 @@ final class DeviceFlowUITests: XCTestCase {
         self.app.launch()
     }
 
-    func testScanForDevices() {
+    func testScanForDevices() throws {
         // Skip this test in CI - Bluetooth scanning doesn't work reliably in CI environment
         guard ProcessInfo.processInfo.environment["CI"] == nil else {
             throw XCTSkip("Bluetooth scanning test skipped in CI environment")
