@@ -142,6 +142,11 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
         }
     }
 
+    /// Processes the command queue serially.
+    ///
+    /// This method checks if the queue is currently being processed. If not, it
+    /// iterates through the queue, sending each command and handling the result.
+    /// If a command fails, the error is propagated to the caller via the continuation.
     private func processCommandQueue() {
         guard !self.isProcessingQueue, !self.commandQueue.isEmpty else { return }
 
@@ -163,6 +168,17 @@ class BLEManager: NSObject, ObservableObject, DeviceTransport {
         }
     }
 
+    /// Sends a command to the connected peripheral and awaits a response.
+    ///
+    /// This method performs the following steps:
+    /// 1. Verifies connection and characteristic availability.
+    /// 2. Waits for the device to be in a "ready" state (signaled by RX characteristic discovery).
+    /// 3. Writes the command string (UTF-8) to the TX characteristic.
+    /// 4. Awaits a response via `responseContinuation`, with a timeout mechanism.
+    ///
+    /// - Parameter command: The string command to send (without newline, as it's added automatically).
+    /// - Returns: The complete response string from the device.
+    /// - Throws: `BLEError.notConnected` if device is not ready, `BLEError.timeout` if no response.
     private func sendCommandInternal(_ command: String) async throws -> String {
         guard let peripheral = connectedPeripheral,
               let tx = txCharacteristic
