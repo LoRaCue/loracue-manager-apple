@@ -16,7 +16,7 @@ class MockTransport: DeviceTransport {
         """,
 
         "general:get": """
-        {"jsonrpc":"2.0","result":{"name":"MockDevice","mode":"PRESENTER","brightness":128,\
+        {"jsonrpc":"2.0","result":{"name":"MockDevice","mode":"PRESENTER","contrast":128,\
         "slot_id":1,"bluetooth":true},"id":ID}
         """,
 

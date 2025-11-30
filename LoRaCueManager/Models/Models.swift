@@ -51,14 +51,14 @@ enum DeviceMode: String, Codable, CaseIterable, Identifiable {
 struct GeneralConfig: Codable, Equatable {
     var name: String
     var mode: DeviceMode
-    var brightness: Int
+    var contrast: Int
     var bluetooth: Bool
     var slotId: Int
 
     enum CodingKeys: String, CodingKey {
         case name
         case mode
-        case brightness
+        case contrast
         case bluetooth
         case slotId = "slot_id"
     }

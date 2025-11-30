@@ -35,13 +35,13 @@ struct GeneralView: View {
                         }
                     }
 
-                    Section("Display Brightness") {
+                    Section("Display Contrast") {
                         HStack {
-                            Text("\(config.brightness)")
+                            Text("\(config.contrast)")
                             Spacer()
                             Slider(value: Binding(
-                                get: { Double(config.brightness) },
-                                set: { self.viewModel.config?.brightness = Int($0) }
+                                get: { Double(config.contrast) },
+                                set: { self.viewModel.config?.contrast = Int($0) }
                             ), in: 0 ... 255, step: 1)
                             #if os(macOS)
                                 .controlSize(.large)
