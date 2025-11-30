@@ -31,20 +31,39 @@ struct GitHubAsset: Codable, Identifiable {
 
 // MARK: - Firmware Manifest Models
 
+/// Defines the structure of the firmware update manifest (manifest.json).
+///
+/// This manifest describes the contents of a firmware release package, including
+/// hardware compatibility, versioning, and the layout of binary files for flashing.
 struct FirmwareManifest: Codable {
+    /// The device model identifier (e.g., "loracue-v2").
     let model: String
+    /// The unique hardware board identifier.
     let boardId: String
+    /// The human-readable name of the board.
     let boardName: String
+    /// The semantic version string of the firmware.
     let version: String
+    /// The date the firmware was built.
     let buildDate: String
+    /// The git commit hash of the source code.
     let commit: String
+    /// The target platform/chipset (e.g., "esp32s3").
     let target: String
+    /// The required flash memory size (e.g., "4MB").
     let flashSize: String
+    /// Information about the main application firmware binary.
     let firmware: BinaryInfo
+    /// Information about the bootloader binary.
     let bootloader: BinaryInfo
+    /// Information about the partition table binary.
     let partitionTable: BinaryInfo
+    /// Optional information about the Web UI resources binary.
     let webui: BinaryInfo?
+    /// Arguments passed to esptool during flashing (e.g., baud rate, flash mode).
+    /// These configure the SPI flash interface parameters.
     let esptoolArgs: [String]
+    /// The URL where the full package can be downloaded (optional).
     let downloadUrl: String?
 
     enum CodingKeys: String, CodingKey {
@@ -59,10 +78,16 @@ struct FirmwareManifest: Codable {
     }
 }
 
+/// Information about a binary file within the firmware package.
 struct BinaryInfo: Codable {
+    /// The filename of the binary.
     let file: String
+    /// The size of the file in bytes.
     let size: Int
+    /// The SHA-256 hash of the file for verification.
     let sha256: String
+    /// The flash memory offset address where this binary should be written (e.g., "0x1000").
+    /// This is typically provided as a hex string.
     let offset: String
 }
 
